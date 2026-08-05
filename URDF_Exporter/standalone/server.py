@@ -45,6 +45,72 @@ WSL_RVIZ_DISTRO = "Ubuntu-22.04"
 WSL_RVIZ_MARKER = "PETASOS_RVIZ_LAUNCHING"
 
 
+def _cleanup_wsl_gui_processes(distro: str = WSL_RVIZ_DISTRO) -> dict:
+    """Stop stale Petasos RViz/MoveIt GUI processes without shutting WSL down."""
+    if os.name != "nt":
+        return {"status": "skipped", "stopped": 0}
+
+    script = r"""
+set +e
+stopped=0
+
+stop_name() {
+    name="$1"
+    pids="$(pgrep -x "$name" 2>/dev/null)"
+    [ -n "$pids" ] || return 0
+    count="$(printf '%s\n' "$pids" | wc -l)"
+    pkill -TERM -x "$name" 2>/dev/null || true
+    stopped=$((stopped + count))
+}
+
+stop_pattern() {
+    pattern="$1"
+    pids="$(pgrep -f "$pattern" 2>/dev/null)"
+    [ -n "$pids" ] || return 0
+    count="$(printf '%s\n' "$pids" | wc -l)"
+    pkill -TERM -f "$pattern" 2>/dev/null || true
+    stopped=$((stopped + count))
+}
+
+stop_name rviz2
+stop_name moveit_setup_assistant
+stop_name move_group
+stop_name joint_state_publisher_gui
+stop_name robot_state_publisher
+stop_name ros2_control_node
+stop_pattern '[r]os2 launch .*display\.launch\.py'
+stop_pattern '[r]os2 launch .*demo\.launch\.py'
+sleep 0.7
+
+pkill -KILL -x rviz2 2>/dev/null || true
+pkill -KILL -x moveit_setup_assistant 2>/dev/null || true
+pkill -KILL -x move_group 2>/dev/null || true
+pkill -KILL -x joint_state_publisher_gui 2>/dev/null || true
+pkill -KILL -x robot_state_publisher 2>/dev/null || true
+pkill -KILL -x ros2_control_node 2>/dev/null || true
+pkill -KILL -f '[r]os2 launch .*display\.launch\.py' 2>/dev/null || true
+pkill -KILL -f '[r]os2 launch .*demo\.launch\.py' 2>/dev/null || true
+
+find "$HOME/petasos_ros2_ws/.petasos_runtime" -maxdepth 1 \
+    -name '*.pid' -type f -delete 2>/dev/null || true
+printf 'PETASOS_WSL_GUI_CLEANED:%s\n' "$stopped"
+"""
+    completed = subprocess.run(
+        ["wsl.exe", "-d", distro, "--", "bash", "-s"],
+        input=script.encode("utf-8"),
+        check=False,
+        capture_output=True,
+        timeout=12,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    output = completed.stdout.decode("utf-8", errors="replace")
+    match = re.search(r"PETASOS_WSL_GUI_CLEANED:(\d+)", output)
+    return {
+        "status": "stopped" if completed.returncode == 0 else "warning",
+        "stopped": int(match.group(1)) if match else 0,
+    }
+
+
 def _open_folder(path: Path) -> None:
     folder = Path(path).resolve()
     if not folder.is_dir():
@@ -306,6 +372,15 @@ exec ros2 launch {quoted_package} display.launch.py
             )
         else:
             process.terminate()
+        try:
+            process.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            process.terminate()
+            try:
+                process.wait(timeout=1.0)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=1.0)
         return self.snapshot()
 
 
@@ -976,9 +1051,39 @@ def create_app(store: ProjectStore | None = None) -> Flask:
             wsl_moveit_runner._set_state("error", str(exc))
             return jsonify({"error": str(exc)}), 500
 
+    @app.post("/wsl/gui/stop")
+    def stop_all_wsl_gui_sessions():
+        """Used by browser refresh/close so the next GUI launch is clean."""
+        errors = []
+        for name, runner in (
+            ("RViz", wsl_rviz_runner),
+            ("MoveIt", wsl_moveit_runner),
+        ):
+            try:
+                runner.stop()
+            except (subprocess.SubprocessError, OSError) as exc:
+                errors.append(f"{name}: {exc}")
+        try:
+            cleanup = app.config["PETASOS_WSL_GUI_CLEANUP"]()
+        except (subprocess.SubprocessError, OSError) as exc:
+            errors.append(f"WSL cleanup: {exc}")
+            cleanup = {"status": "warning", "stopped": 0}
+
+        wsl_rviz_runner._set_state("stopped", "RViz가 종료되었습니다.")
+        wsl_moveit_runner._set_state("stopped", "MoveIt 작업이 종료되었습니다.")
+        payload = {
+            "status": "stopped" if not errors else "warning",
+            "message": "RViz와 MoveIt 세션을 정리했습니다.",
+            "stopped": cleanup.get("stopped", 0),
+        }
+        if errors:
+            payload["warnings"] = errors
+        return jsonify(payload)
+
     app.config["PETASOS_STORE"] = project_store
     app.config["PETASOS_WSL_RVIZ"] = wsl_rviz_runner
     app.config["PETASOS_WSL_MOVEIT"] = wsl_moveit_runner
+    app.config["PETASOS_WSL_GUI_CLEANUP"] = _cleanup_wsl_gui_processes
     return app
 
 

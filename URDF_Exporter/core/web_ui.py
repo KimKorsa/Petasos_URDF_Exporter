@@ -9262,6 +9262,40 @@ HTML_CONTENT = """
             }
         }
 
+        let petasosRefreshCleanupStarted = false;
+        let petasosRefreshCleanupFinished = false;
+
+        async function cleanupWslGuiBeforeRefresh() {
+            if (petasosRefreshCleanupStarted) return;
+            petasosRefreshCleanupStarted = true;
+            try {
+                await fetch('/wsl/gui/stop', {
+                    method: 'POST',
+                    keepalive: true
+                });
+            } catch (_) {
+                // The server-side cleanup can continue even if the page is closing.
+            } finally {
+                petasosRefreshCleanupFinished = true;
+                window.location.reload();
+            }
+        }
+
+        document.addEventListener('keydown', event => {
+            const keyboardRefresh = event.key === 'F5' || (
+                (event.ctrlKey || event.metaKey) &&
+                event.key.toLowerCase() === 'r'
+            );
+            if (!keyboardRefresh) return;
+            event.preventDefault();
+            cleanupWslGuiBeforeRefresh();
+        }, true);
+
+        window.addEventListener('beforeunload', () => {
+            if (petasosRefreshCleanupFinished) return;
+            navigator.sendBeacon('/wsl/gui/stop');
+        });
+
         function proceedSave() {
             const payload = {
                 tree: treeData,

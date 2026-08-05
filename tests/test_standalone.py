@@ -1803,6 +1803,28 @@ endsolid triangle
         self.assertEqual(response.status_code, 200)
         run_smoke.assert_called_once_with()
 
+    def test_browser_refresh_stops_rviz_moveit_and_stale_wsl_gui(self):
+        rviz_runner = self.app.config["PETASOS_WSL_RVIZ"]
+        moveit_runner = self.app.config["PETASOS_WSL_MOVEIT"]
+        cleanup = mock.Mock(return_value={"status": "stopped", "stopped": 4})
+        self.app.config["PETASOS_WSL_GUI_CLEANUP"] = cleanup
+
+        with mock.patch.object(rviz_runner, "stop") as stop_rviz, \
+             mock.patch.object(moveit_runner, "stop") as stop_moveit:
+            response = self.client.post("/wsl/gui/stop")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["status"], "stopped")
+        self.assertEqual(response.get_json()["stopped"], 4)
+        stop_rviz.assert_called_once_with()
+        stop_moveit.assert_called_once_with()
+        cleanup.assert_called_once_with()
+
+        html = self.client.get("/").get_data(as_text=True)
+        self.assertIn("cleanupWslGuiBeforeRefresh", html)
+        self.assertIn("navigator.sendBeacon('/wsl/gui/stop')", html)
+        self.assertIn("event.key === 'F5'", html)
+
     def test_moveit_routes_require_an_export(self):
         self.assertEqual(
             self.client.post("/moveit/wsl/assistant").status_code,
@@ -2351,6 +2373,9 @@ endsolid triangle
         self.assertIn("Closing any previous Petasos RViz window", launcher)
         self.assertIn("pkill -TERM -x rviz2", rviz_cleanup)
         self.assertIn("pkill -KILL -x rviz2", rviz_cleanup)
+        self.assertIn("moveit_setup_assistant", rviz_cleanup)
+        self.assertIn("move_group", rviz_cleanup)
+        self.assertIn("demo\\.launch\\.py", rviz_cleanup)
         self.assertIn("display.launch.py", rviz_cleanup)
         self.assertNotIn("wsl.exe --shutdown", rviz_cleanup)
 

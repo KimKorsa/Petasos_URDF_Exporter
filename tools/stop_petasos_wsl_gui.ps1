@@ -37,6 +37,22 @@ if [ -n "$rviz_pids" ]; then
   pkill -KILL -x rviz2 2>/dev/null
 fi
 
+for process_name in moveit_setup_assistant move_group joint_state_publisher_gui robot_state_publisher ros2_control_node; do
+  process_pids="$(pgrep -x "$process_name" 2>/dev/null)"
+  if [ -n "$process_pids" ]; then
+    process_count="$(printf '%s\n' "$process_pids" | wc -l)"
+    pkill -TERM -x "$process_name" 2>/dev/null
+    stopped=$((stopped + process_count))
+  fi
+done
+
+pkill -TERM -f '[r]os2 launch .*demo\.launch\.py' 2>/dev/null
+sleep 0.5
+for process_name in moveit_setup_assistant move_group joint_state_publisher_gui robot_state_publisher ros2_control_node; do
+  pkill -KILL -x "$process_name" 2>/dev/null
+done
+pkill -KILL -f '[r]os2 launch .*demo\.launch\.py' 2>/dev/null
+
 printf 'PETASOS_RVIZ_CLEANED:%s\n' "$stopped"
 exit 0
 '@
