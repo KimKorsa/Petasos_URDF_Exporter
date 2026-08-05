@@ -1,0 +1,7 @@
+flask
+trimesh
+fast-simplification
+numpy
+scipy
+cadquery-ocp
+pywin32; platform_system == "Windows"

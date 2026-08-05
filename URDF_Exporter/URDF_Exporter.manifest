@@ -1,0 +1,10 @@
+{
+	"autodeskProduct":	"Fusion360",
+	"type":	"script",
+	"author":	"Petasos",
+	"description":	{
+		"":	"Export CAD assemblies as ROS 2 URDF packages"
+	},
+	"supportedOS":	"windows|mac",
+	"editEnabled":	true
+}

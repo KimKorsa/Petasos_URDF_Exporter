@@ -1,0 +1,50 @@
+{
+  "format": "petasos-assembly",
+  "version": "1.0",
+  "source": {
+    "application": "Any CAD",
+    "document": "simple-arm"
+  },
+  "assembly": {
+    "name": "simple_arm",
+    "units": "mm",
+    "angle_units": "deg",
+    "up_axis": "z",
+    "handedness": "right"
+  },
+  "parts": [
+    {
+      "id": "base",
+      "name": "base",
+      "geometry": "base.stl"
+    },
+    {
+      "id": "arm",
+      "name": "arm",
+      "geometry": "arm.stl",
+      "transform": {
+        "position": [0, 0, 150],
+        "rotation": [0, 0, 0]
+      }
+    }
+  ],
+  "joints": [
+    {
+      "name": "base_to_arm",
+      "parent": "base",
+      "child": "arm",
+      "type": "revolute",
+      "origin": {
+        "xyz": [0, 0, 150],
+        "rpy": [0, 0, 0]
+      },
+      "axis": [0, 1, 0],
+      "limits": {
+        "lower": -90,
+        "upper": 90,
+        "effort": 30,
+        "velocity": 2
+      }
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Petasos Assembly Exchange 1.0",
+  "type": "object",
+  "required": ["format", "version", "assembly", "parts"],
+  "properties": {
+    "format": { "const": "petasos-assembly" },
+    "version": { "const": "1.0" },
+    "source": {
+      "type": "object",
+      "properties": {
+        "application": { "type": "string" },
+        "version": { "type": "string" },
+        "document": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "assembly": {
+      "type": "object",
+      "required": ["name", "units"],
+      "properties": {
+        "name": { "type": "string" },
+        "units": { "enum": ["mm", "cm", "m", "in", "inch", "ft"] },
+        "angle_units": { "enum": ["rad", "deg"] },
+        "up_axis": { "enum": ["x", "y", "z"] },
+        "handedness": { "enum": ["left", "right"] }
+      }
+    },
+    "parts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "geometry"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "geometry": { "type": "string" },
+          "transform": {
+            "type": "object",
+            "properties": {
+              "position": { "$ref": "#/$defs/vector3" },
+              "rotation": { "$ref": "#/$defs/vector3" }
+            }
+          },
+          "physical": {
+            "type": "object",
+            "properties": {
+              "mass": { "type": "number", "exclusiveMinimum": 0 },
+              "center_of_mass": { "$ref": "#/$defs/vector3" },
+              "inertia": {
+                "type": "array",
+                "minItems": 6,
+                "maxItems": 6,
+                "items": { "type": "number" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "joints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "parent", "child", "type"],
+        "properties": {
+          "name": { "type": "string" },
+          "parent": { "type": "string" },
+          "child": { "type": "string" },
+          "type": { "enum": ["fixed", "revolute", "continuous", "prismatic"] },
+          "axis": { "$ref": "#/$defs/vector3" },
+          "origin": {
+            "type": "object",
+            "properties": {
+              "xyz": { "$ref": "#/$defs/vector3" },
+              "rpy": { "$ref": "#/$defs/vector3" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "vector3": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "number" }
+    }
+  }
+}
