@@ -2,6 +2,8 @@
 
 Petasos는 CAD 조립품을 불러와 로봇의 링크와 조인트 구조를 편집하고, ROS 2용 URDF 패키지로 내보내는 도구입니다.
 
+사용법: https://youtu.be/H9movJFO4Fs
+
 ## 주요 기능
 
 - Autodesk Inventor IAM/IPT 직접 연결 및 파일 가져오기
