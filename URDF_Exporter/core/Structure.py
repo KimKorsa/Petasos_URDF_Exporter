@@ -65,6 +65,61 @@ class RobotStructure:
             m[8] * p[0] + m[9] * p[1] + m[10] * p[2] + m[11]
         ]
 
+    def _inertia_matrix(self, values):
+        """Build a symmetric inertia tensor from URDF's six components."""
+        try:
+            ixx, iyy, izz, ixy, ixz, iyz = [float(value) for value in values]
+        except (TypeError, ValueError):
+            return [
+                [0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0],
+            ]
+        return [
+            [ixx, ixy, ixz],
+            [ixy, iyy, iyz],
+            [ixz, iyz, izz],
+        ]
+
+    def _rotate_inertia(self, tensor, transform):
+        """Rotate a COM-centred tensor into the link coordinate frame."""
+        rotation = [
+            [transform[0], transform[1], transform[2]],
+            [transform[4], transform[5], transform[6]],
+            [transform[8], transform[9], transform[10]],
+        ]
+        rotated = [[0.0] * 3 for _ in range(3)]
+        for row in range(3):
+            for column in range(3):
+                rotated[row][column] = sum(
+                    rotation[row][left]
+                    * tensor[left][right]
+                    * rotation[column][right]
+                    for left in range(3)
+                    for right in range(3)
+                )
+        return rotated
+
+    def _parallel_axis_inertia(self, tensor, mass, offset):
+        """Shift a COM-centred tensor by d using m (||d||² I - d dᵀ)."""
+        distance_squared = sum(value * value for value in offset)
+        shifted = [[float(tensor[row][column]) for column in range(3)] for row in range(3)]
+        for row in range(3):
+            for column in range(3):
+                identity = 1.0 if row == column else 0.0
+                shifted[row][column] += mass * (
+                    distance_squared * identity - offset[row] * offset[column]
+                )
+        return shifted
+
+    def _inertia_components(self, tensor):
+        # Suppress insignificant floating-point asymmetry introduced by matrix
+        # multiplication before serialising the URDF tensor.
+        xy = (tensor[0][1] + tensor[1][0]) / 2.0
+        xz = (tensor[0][2] + tensor[2][0]) / 2.0
+        yz = (tensor[1][2] + tensor[2][1]) / 2.0
+        return [tensor[0][0], tensor[1][1], tensor[2][2], xy, xz, yz]
+
     def _matrix_xyz(self, m):
         return [round(m[3], 6), round(m[7], 6), round(m[11], 6)]
 
@@ -255,8 +310,21 @@ class RobotStructure:
         new_materials = {}
         new_additional_visuals = {}
         preview_units_per_meter = data.get('_preview_units_per_meter', 1000.0)
+        preview_visual_transforms = {}
+        for component, values in (data.get('_preview_transforms') or {}).items():
+            converted = self._preview_world_matrix(values, preview_units_per_meter)
+            if converted is not None:
+                preview_visual_transforms[component] = converted
+
+        def component_world_transform(component):
+            return preview_visual_transforms.get(
+                component,
+                self.visual_transforms.get(component, self._identity_matrix()),
+            )
 
         def traverse(node, parent_link_name=None, link_frame_world=None):
+            if not node or node.get('disabled'):
+                return
             link_name = node['name']
             components = node.get('components') or []
             if not components:
@@ -264,45 +332,77 @@ class RobotStructure:
             
             base_comp = components[0] # 첫 번째 컴포넌트를 메인 레퍼런스로 사용
             if link_frame_world is None:
-                link_frame_world = self.visual_transforms.get(base_comp, self._identity_matrix())
+                link_frame_world = component_world_transform(base_comp)
             
-            total_mass = 0
-            com_global = [0, 0, 0]
-            inertia_global = [0] * 6
+            total_mass = 0.0
+            weighted_com_local = [0.0, 0.0, 0.0]
+            component_mass_properties = []
             visuals = []
             
             for comp in components:
-                m = self.inertial[comp]['mass']
+                physical = self.inertial[comp]
+                m = float(physical['mass'])
                 total_mass += m
-                p = self.inertial[comp]['center_of_mass']
-                com_global = [com_global[i] + m * p[i] for i in range(3)]
-                
-                i_t = self.inertial[comp]['inertia']
-                inertia_global = [inertia_global[k] + i_t[k] for k in range(6)]
-                
                 mat = self.materials[comp]['material']
                 
                 if comp == base_comp:
                     new_materials[link_name] = {'material': mat}
                 
-                comp_world = self.visual_transforms.get(comp, self._identity_matrix())
+                comp_world = component_world_transform(comp)
                 comp_local = self._relative_matrix(link_frame_world, comp_world)
+                component_com_local = self._transform_point(
+                    comp_local,
+                    physical['center_of_mass'],
+                )
+                weighted_com_local = [
+                    weighted_com_local[index] + m * component_com_local[index]
+                    for index in range(3)
+                ]
+                rotated_inertia = self._rotate_inertia(
+                    self._inertia_matrix(physical['inertia']),
+                    comp_local,
+                )
+                component_mass_properties.append(
+                    (m, component_com_local, rotated_inertia)
+                )
                 visuals.append((comp, mat, self._matrix_xyz(comp_local), self._matrix_rpy(comp_local)))
 
-                    
             if total_mass > 0:
-                com_global = [com_global[i] / total_mass for i in range(3)]
-            link_frame_world_inv = self._mat_inv_rigid(link_frame_world)
-            com_local = self._transform_point(link_frame_world_inv, com_global)
+                com_local = [value / total_mass for value in weighted_com_local]
+            else:
+                com_local = [0.0, 0.0, 0.0]
+
+            combined_inertia = [[0.0] * 3 for _ in range(3)]
+            for mass, component_com, rotated_inertia in component_mass_properties:
+                offset = [
+                    component_com[index] - com_local[index]
+                    for index in range(3)
+                ]
+                shifted_inertia = self._parallel_axis_inertia(
+                    rotated_inertia,
+                    mass,
+                    offset,
+                )
+                for row in range(3):
+                    for column in range(3):
+                        combined_inertia[row][column] += shifted_inertia[row][column]
                 
             new_inertial[link_name] = {
                 'mass': total_mass,
                 'center_of_mass': com_local,
-                'inertia': inertia_global
+                'inertia': self._inertia_components(combined_inertia),
+                'provenance': 'composite_rigid_body',
+                'components': list(components),
+                'confidence': min(
+                    float(self.inertial[comp].get('confidence', 1.0))
+                    for comp in components
+                ),
             }
             new_additional_visuals[link_name] = visuals
             
-            for child in node['children']:
+            for child in node.get('children') or []:
+                if child.get('disabled') or child.get('link_group', {}).get('disabled'):
+                    continue
                 j_name = child['joint_name']
                 j_info = child['joint_info']
                 # Use the exact frame seen in the 3D viewer as the URDF source

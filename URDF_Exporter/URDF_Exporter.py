@@ -418,6 +418,7 @@ Visualization Manager:
             f.write(f"""import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
+from launch.actions import SetEnvironmentVariable
 from launch.substitutions import Command
 from launch_ros.actions import Node
 
@@ -427,6 +428,8 @@ def generate_launch_description():
     rviz_config = os.path.join(package_dir, 'launch', 'display.rviz')
 
     return LaunchDescription([
+        SetEnvironmentVariable(name='LIBGL_ALWAYS_SOFTWARE', value='1'),
+        SetEnvironmentVariable(name='OGRE_RTT_MODE', value='Copy'),
         Node(
             package='robot_state_publisher',
             executable='robot_state_publisher',

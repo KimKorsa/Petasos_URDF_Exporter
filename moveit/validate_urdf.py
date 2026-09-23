@@ -197,13 +197,12 @@ def validate_urdf_for_moveit(
                 f"found {sorted(command_names)}"
             )
         position_state = control_joint.find("state_interface[@name='position']")
-        velocity_state = control_joint.find("state_interface[@name='velocity']")
-        if state_names != {"position", "velocity"}:
+        if state_names not in ({"position"}, {"position", "velocity"}):
             errors.append(
-                f"{name}: state interfaces must be exactly [position, velocity], "
+                f"{name}: state interfaces must be exactly [position] or [position, velocity], "
                 f"found {sorted(state_names)}"
             )
-        if position_state is None or velocity_state is None:
+        if position_state is None:
             continue
         initial_node = position_state.find("param[@name='initial_value']")
         initial_text = initial_node.text.strip() if initial_node is not None and initial_node.text else None

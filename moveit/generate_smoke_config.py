@@ -51,6 +51,8 @@ def generate_smoke_config(
     description_package: Path,
     urdf_path: Path,
     output_dir: Path,
+    joint_overrides: dict | None = None,
+    controller_groups: list[dict] | None = None,
 ) -> dict:
     description_package = Path(description_package).resolve()
     urdf_path = Path(urdf_path).resolve()
@@ -63,6 +65,16 @@ def generate_smoke_config(
             f"출력 폴더 이름은 {moveit_package}이어야 합니다: {output_dir}"
         )
     joints = _joint_data(urdf_path)
+    joint_overrides = joint_overrides or {}
+    for joint in joints:
+        override = joint_overrides.get(joint["name"], {})
+        try:
+            initial = float(override.get("initial_position", joint["initial"]))
+        except (TypeError, ValueError):
+            initial = joint["initial"]
+        if joint["type"] != "continuous" and not joint["lower"] <= initial <= joint["upper"]:
+            initial = (joint["lower"] + joint["upper"]) / 2.0
+        joint["initial"] = initial
     robot_root = ElementTree.parse(urdf_path).getroot()
     all_links = [
         element.get("name")
@@ -187,15 +199,24 @@ sensors: []
 
     limit_blocks = []
     for joint in joints:
+        override = joint_overrides.get(joint["name"], {})
+        max_velocity = float(override.get("velocity_limit", 1.0))
+        max_acceleration = float(override.get("max_acceleration", 1.0))
         limit_blocks.extend(
             [
                 f'  {joint["name"]}:',
                 "    has_velocity_limits: true",
-                "    max_velocity: 1.0",
+                f"    max_velocity: {_real(max_velocity)}",
                 "    has_acceleration_limits: true",
-                "    max_acceleration: 1.0",
+                f"    max_acceleration: {_real(max_acceleration)}",
             ]
         )
+        if override.get("max_deceleration") is not None:
+            limit_blocks.append(
+                f'    max_deceleration: {_real(float(override["max_deceleration"]))}'
+            )
+        if override.get("max_jerk") is not None:
+            limit_blocks.append(f'    max_jerk: {_real(float(override["max_jerk"]))}')
     _write(
         output_dir / "config" / "joint_limits.yaml",
         "joint_limits:\n" + "\n".join(limit_blocks),
@@ -222,7 +243,73 @@ arm:
 """,
     )
 
-    joint_names = "\n".join(f'      - {joint["name"]}' for joint in joints)
+    joint_name_set = {joint["name"] for joint in joints}
+    groups = []
+    claimed = set()
+    for raw in controller_groups or []:
+        group_joints = [
+            name for name in raw.get("joints") or []
+            if name in joint_name_set and name not in claimed
+        ]
+        if not group_joints:
+            continue
+        claimed.update(group_joints)
+        groups.append({"name": raw["name"], "joints": group_joints})
+    unassigned = [joint["name"] for joint in joints if joint["name"] not in claimed]
+    if unassigned:
+        used_names = {group["name"] for group in groups}
+        groups.append({
+            "name": "arm_controller" if "arm_controller" not in used_names else "unassigned_controller",
+            "joints": unassigned,
+        })
+    if not groups and joints:
+        groups = [{"name": "arm_controller", "joints": [joint["name"] for joint in joints]}]
+
+    moveit_controller_names = "\n".join(f"    - {group['name']}" for group in groups)
+    moveit_controller_blocks = []
+    ros_manager_blocks = []
+    ros_controller_blocks = []
+    for group_index, group in enumerate(groups):
+        group_joint_lines = "\n".join(f"      - {name}" for name in group["joints"])
+        moveit_controller_blocks.extend([
+            f"  {group['name']}:",
+            "    action_ns: follow_joint_trajectory",
+            "    type: FollowJointTrajectory",
+            f"    default: {'true' if group_index == 0 else 'false'}",
+            "    joints:",
+            group_joint_lines,
+        ])
+        ros_manager_blocks.extend([
+            f"    {group['name']}:",
+            "      type: joint_trajectory_controller/JointTrajectoryController",
+        ])
+        command_interfaces = None
+        state_interfaces = None
+        for name in group["joints"]:
+            override = joint_overrides.get(name, {})
+            command = override.get("command_interface", "position")
+            joint_commands = {command}
+            joint_states = set(override.get("state_interfaces") or ["position"])
+            command_interfaces = joint_commands if command_interfaces is None else command_interfaces & joint_commands
+            state_interfaces = joint_states if state_interfaces is None else state_interfaces & joint_states
+        command_interfaces = [value for value in ("position", "velocity", "effort") if value in command_interfaces]
+        state_interfaces = [value for value in ("position", "velocity") if value in state_interfaces]
+        if not command_interfaces or "position" not in state_interfaces:
+            raise ValueError(
+                f"MoveIt controller '{group['name']}' has no common trajectory "
+                "command interface and position state across its joints; split the controller group"
+            )
+        ros_controller_blocks.extend([
+            "",
+            f"{group['name']}:",
+            "  ros__parameters:",
+            "    command_interfaces:",
+            *[f"      - {value}" for value in command_interfaces],
+            "    state_interfaces:",
+            *[f"      - {value}" for value in state_interfaces],
+            "    joints:",
+            *[f"      - {name}" for name in group["joints"]],
+        ])
     _write(
         output_dir / "config" / "moveit_controllers.yaml",
         f"""
@@ -236,13 +323,8 @@ moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControll
 
 moveit_simple_controller_manager:
   controller_names:
-    - arm_controller
-  arm_controller:
-    action_ns: follow_joint_trajectory
-    type: FollowJointTrajectory
-    default: true
-    joints:
-{joint_names}
+{moveit_controller_names}
+{chr(10).join(moveit_controller_blocks)}
 """,
     )
     _write(
@@ -251,20 +333,10 @@ moveit_simple_controller_manager:
 controller_manager:
   ros__parameters:
     update_rate: 100
-    arm_controller:
-      type: joint_trajectory_controller/JointTrajectoryController
+{chr(10).join(ros_manager_blocks)}
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
-
-arm_controller:
-  ros__parameters:
-    command_interfaces:
-      - position
-    state_interfaces:
-      - position
-      - velocity
-    joints:
-{joint_names}
+{chr(10).join(ros_controller_blocks)}
 """,
     )
     _write(

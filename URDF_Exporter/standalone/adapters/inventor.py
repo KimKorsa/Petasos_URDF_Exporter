@@ -262,12 +262,16 @@ def _mass_properties(part_document) -> dict[str, Any] | None:
         moments = list(props.XYZMomentsOfInertia())
         if len(moments) != 6 or mass <= 0:
             return None
+        # Inventor database volume units are cm^3.
+        volume_m3 = float(props.Volume) * 1e-6
         # Inventor database units are kg and cm; inertia therefore uses kg*cm^2.
         inertia = [float(value) * 1e-4 for value in moments]
         # Inventor order: Ixx, Iyy, Izz, Ixy, Iyz, Ixz.
         inertia = [inertia[0], inertia[1], inertia[2], inertia[3], inertia[5], inertia[4]]
         return {
             "mass": mass,
+            "volume_m3": volume_m3,
+            "density": mass / volume_m3 if volume_m3 > 0 else None,
             "center_of_mass": center_m,
             "inertia": inertia,
             "provenance": "inventor_mass_properties",

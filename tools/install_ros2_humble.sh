@@ -95,5 +95,15 @@ command -v colcon >/dev/null
 command -v rosdep >/dev/null
 command -v xacro >/dev/null
 
+if [[ -n "$TARGET_USER" && "$TARGET_USER" != "root" ]]; then
+  USER_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+  if [[ -f "$USER_HOME/.bashrc" ]] && ! grep -q "LIBGL_ALWAYS_SOFTWARE" "$USER_HOME/.bashrc"; then
+    echo "" >> "$USER_HOME/.bashrc"
+    echo "# Petasos WSLg RViz2 / OGRE compatibility" >> "$USER_HOME/.bashrc"
+    echo "export LIBGL_ALWAYS_SOFTWARE=1" >> "$USER_HOME/.bashrc"
+    echo "export OGRE_RTT_MODE=Copy" >> "$USER_HOME/.bashrc"
+  fi
+fi
+
 echo
 echo "ROS 2 Humble installation and verification completed."

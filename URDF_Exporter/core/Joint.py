@@ -42,6 +42,11 @@ class Joint:
         effort_limit=100.0,
         velocity_limit=1.0,
         initial_position=0.0,
+        damping=None,
+        friction=None,
+        mimic_joint=None,
+        mimic_multiplier=1.0,
+        mimic_offset=0.0,
     ):
         """
         Attributes
@@ -77,6 +82,11 @@ class Joint:
         self.effort_limit = effort_limit
         self.velocity_limit = velocity_limit
         self.initial_position = initial_position
+        self.damping = damping
+        self.friction = friction
+        self.mimic_joint = mimic_joint
+        self.mimic_multiplier = mimic_multiplier
+        self.mimic_offset = mimic_offset
 
     def make_joint_xml(self):
         """
@@ -109,6 +119,21 @@ class Joint:
                 'effort': real_number_text(self.effort_limit),
                 'velocity': real_number_text(self.velocity_limit),
             })
+        dynamics_values = {}
+        if self.damping is not None:
+            dynamics_values['damping'] = real_number_text(self.damping)
+        if self.friction is not None:
+            dynamics_values['friction'] = real_number_text(self.friction)
+        if dynamics_values:
+            dynamics = SubElement(joint, 'dynamics')
+            dynamics.attrib = dynamics_values
+        if self.mimic_joint:
+            mimic = SubElement(joint, 'mimic')
+            mimic.attrib = {
+                'joint': str(self.mimic_joint),
+                'multiplier': real_number_text(self.mimic_multiplier),
+                'offset': real_number_text(self.mimic_offset),
+            }
 
         self.joint_xml = "\n".join(utils.prettify(joint).split("\n")[1:])
 
@@ -141,8 +166,6 @@ class Joint:
         initial = SubElement(state_position, 'param')
         initial.attrib = {'name': 'initial_value'}
         initial.text = real_number_text(initial_value)
-        state_velocity = SubElement(joint, 'state_interface')
-        state_velocity.attrib = {'name': 'velocity'}
         self.tran_xml = "\n".join(utils.prettify(joint).split("\n")[1:])
 
 

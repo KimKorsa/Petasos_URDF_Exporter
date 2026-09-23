@@ -296,6 +296,8 @@ class WslMoveItRunner:
         script = f"""
 set -eo pipefail
 source /opt/ros/humble/setup.bash
+export LIBGL_ALWAYS_SOFTWARE=1
+export OGRE_RTT_MODE=Copy
 workspace={workspace}
 target="$workspace/src/{package_name}"
 config_target="$workspace/src/{config_package}"
@@ -384,6 +386,8 @@ exit "$assistant_status"
         script = f"""
 set -eo pipefail
 source /opt/ros/humble/setup.bash
+export LIBGL_ALWAYS_SOFTWARE=1
+export OGRE_RTT_MODE=Copy
 workspace={workspace}
 description_target="$workspace/src/{package_name}"
 config_target="$workspace/src/{config_package}"

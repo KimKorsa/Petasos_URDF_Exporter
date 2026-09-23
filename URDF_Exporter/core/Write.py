@@ -82,7 +82,12 @@ def write_joint_urdf(joints_dict, repo, links_xyz_dict, file_name):
                 rpy=joints_dict[j].get('rpy', [0, 0, 0]),
                 effort_limit=joints_dict[j].get('effort_limit', 100.0),
                 velocity_limit=joints_dict[j].get('velocity_limit', 1.0),
-                initial_position=joints_dict[j].get('initial_position', 0.0))
+                initial_position=joints_dict[j].get('initial_position', 0.0),
+                damping=joints_dict[j].get('damping'),
+                friction=joints_dict[j].get('friction'),
+                mimic_joint=joints_dict[j].get('mimic_joint'),
+                mimic_multiplier=joints_dict[j].get('mimic_multiplier', 1.0),
+                mimic_offset=joints_dict[j].get('mimic_offset', 0.0))
             joint.make_joint_xml()
             f.write(joint.joint_xml + '\n')
 
@@ -100,6 +105,7 @@ def write_urdf(
     root_orientation_rpy=None,
     root_origin_xyz=None,
     collision_meshes=None,
+    root_joint_mode=None,
 ):
     if not os.path.exists(save_dir + '/urdf'): os.makedirs(save_dir + '/urdf')
     file_name = save_dir + '/urdf/' + robot_name.lower() + '.xacro'
@@ -109,6 +115,8 @@ def write_urdf(
         root_origin_xyz = [0, 0, 0]
     root_orientation_text = " ".join(str(value) for value in root_orientation_rpy)
     root_origin_text = " ".join(str(value) for value in root_origin_xyz)
+    if root_joint_mode not in {"world", "base_footprint", "none"}:
+        root_joint_mode = "world" if fix_to_world else "none"
     
     with open(file_name, mode='w') as f:
         f.write('<?xml version="1.0" ?>\n')
@@ -122,9 +130,10 @@ def write_urdf(
             f.write('<xacro:include filename="{}.gazebo" />\n'.format(robot_name))
         f.write('\n')
         
-        if fix_to_world:
-            # World 링크 추가 및 base_link(루트) 고정
+        if root_joint_mode == "world":
             f.write('<link name="world"/>\n')
+        elif root_joint_mode == "base_footprint":
+            f.write('<link name="base_footprint"/>\n')
         
     write_link_urdf(
         joints_dict,
@@ -138,14 +147,15 @@ def write_urdf(
         collision_meshes,
     )
     
-    if fix_to_world:
-        # world와 root_name(보통 base_link)을 연결하는 조인트 수동 추가
+    if root_joint_mode != "none":
         root_name = list(links_xyz_dict.keys())[0] if links_xyz_dict else "base_link"
+        parent_name = "world" if root_joint_mode == "world" else "base_footprint"
+        joint_name = "world_joint" if root_joint_mode == "world" else "base_footprint_joint"
         with open(file_name, mode='a') as f:
             f.write(f'''
-<joint name="world_joint" type="fixed">
+<joint name="{joint_name}" type="fixed">
   <origin xyz="{root_origin_text}" rpy="{root_orientation_text}"/>
-  <parent link="world"/>
+  <parent link="{parent_name}"/>
   <child link="{root_name}"/>
 </joint>
 ''')
@@ -198,28 +208,30 @@ def write_transmissions_xacro(joints_dict, robot_name, save_dir):
             for name, info in movable_joints:
                 joint = SubElement(control, 'joint')
                 joint.attrib = {'name': name}
+                command_name = info.get('command_interface', 'position')
                 command = SubElement(joint, 'command_interface')
-                command.attrib = {'name': 'position'}
-                if info['type'] in ('revolute', 'prismatic'):
+                command.attrib = {'name': command_name}
+                if command_name == 'position' and info['type'] in ('revolute', 'prismatic'):
                     minimum = SubElement(command, 'param')
                     minimum.attrib = {'name': 'min'}
                     minimum.text = Joint.real_number_text(info['lower_limit'])
                     maximum = SubElement(command, 'param')
                     maximum.attrib = {'name': 'max'}
                     maximum.text = Joint.real_number_text(info['upper_limit'])
-                state_position = SubElement(joint, 'state_interface')
-                state_position.attrib = {'name': 'position'}
-                initial_value = float(info.get('initial_position', 0.0))
-                if info['type'] in ('revolute', 'prismatic'):
-                    lower = float(info['lower_limit'])
-                    upper = float(info['upper_limit'])
-                    if not lower <= initial_value <= upper:
-                        initial_value = (lower + upper) / 2.0
-                initial = SubElement(state_position, 'param')
-                initial.attrib = {'name': 'initial_value'}
-                initial.text = Joint.real_number_text(initial_value)
-                state_velocity = SubElement(joint, 'state_interface')
-                state_velocity.attrib = {'name': 'velocity'}
+                state_interfaces = info.get('state_interfaces') or ['position']
+                for state_name in state_interfaces:
+                    state = SubElement(joint, 'state_interface')
+                    state.attrib = {'name': state_name}
+                    if state_name == 'position':
+                        initial_value = float(info.get('initial_position', 0.0))
+                        if info['type'] in ('revolute', 'prismatic'):
+                            lower = float(info['lower_limit'])
+                            upper = float(info['upper_limit'])
+                            if not lower <= initial_value <= upper:
+                                initial_value = (lower + upper) / 2.0
+                        initial = SubElement(state, 'param')
+                        initial.attrib = {'name': 'initial_value'}
+                        initial.text = Joint.real_number_text(initial_value)
 
             control_xml = "\n".join(utils.prettify(control).split("\n")[1:])
             control_xml = control_xml.replace("xacro_if", "xacro:if")

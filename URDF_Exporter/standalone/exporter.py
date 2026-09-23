@@ -17,6 +17,7 @@ import numpy as np
 import trimesh
 
 from URDF_Exporter.core import Structure, Write
+from URDF_Exporter.standalone.physical_materials import apply_material_overrides
 from moveit.generate_smoke_config import generate_smoke_config
 
 
@@ -67,6 +68,7 @@ def _write_moveit_seed_urdf(
     robot_name: str,
     path: str,
     fix_to_world: bool,
+    root_joint_mode: str | None = None,
 ) -> None:
     robot = ElementTree.Element("robot", {"name": robot_name})
     link_names = list(struct.inertial)
@@ -77,18 +79,37 @@ def _write_moveit_seed_urdf(
     }
     root_links = [name for name in link_names if name not in child_links]
     root_link = root_links[0] if root_links else (link_names[0] if link_names else None)
-    if fix_to_world:
+    if root_joint_mode not in {"world", "base_footprint", "none"}:
+        root_joint_mode = "world" if fix_to_world else "none"
+    if root_joint_mode == "world":
         ElementTree.SubElement(robot, "link", {"name": "world"})
+    elif root_joint_mode == "base_footprint":
+        ElementTree.SubElement(robot, "link", {"name": "base_footprint"})
     for link_name in link_names:
         ElementTree.SubElement(robot, "link", {"name": link_name})
-    if fix_to_world and root_link:
-        world_joint = ElementTree.SubElement(
+    if root_joint_mode != "none" and root_link:
+        root_joint = ElementTree.SubElement(
             robot,
             "joint",
-            {"name": "world_joint", "type": "fixed"},
+            {
+                "name": (
+                    "world_joint"
+                    if root_joint_mode == "world"
+                    else "base_footprint_joint"
+                ),
+                "type": "fixed",
+            },
         )
-        ElementTree.SubElement(world_joint, "parent", {"link": "world"})
-        ElementTree.SubElement(world_joint, "child", {"link": root_link})
+        ElementTree.SubElement(
+            root_joint,
+            "parent",
+            {
+                "link": (
+                    "world" if root_joint_mode == "world" else "base_footprint"
+                )
+            },
+        )
+        ElementTree.SubElement(root_joint, "child", {"link": root_link})
 
     for name, info in struct.joints.items():
         joint_type = info.get("type", "fixed")
@@ -99,6 +120,14 @@ def _write_moveit_seed_urdf(
         )
         ElementTree.SubElement(joint, "parent", {"link": info["parent"]})
         ElementTree.SubElement(joint, "child", {"link": info["child"]})
+        ElementTree.SubElement(
+            joint,
+            "origin",
+            {
+                "xyz": " ".join(str(float(value)) for value in info.get("xyz", [0, 0, 0])),
+                "rpy": " ".join(str(float(value)) for value in info.get("rpy", [0, 0, 0])),
+            },
+        )
         if joint_type in {"revolute", "continuous", "prismatic"}:
             axis = info.get("axis") or [0.0, 0.0, 1.0]
             ElementTree.SubElement(
@@ -114,6 +143,23 @@ def _write_moveit_seed_urdf(
                 limit["lower"] = str(float(info["lower_limit"]))
                 limit["upper"] = str(float(info["upper_limit"]))
             ElementTree.SubElement(joint, "limit", limit)
+        dynamics = {}
+        if info.get("damping") is not None:
+            dynamics["damping"] = str(float(info["damping"]))
+        if info.get("friction") is not None:
+            dynamics["friction"] = str(float(info["friction"]))
+        if dynamics:
+            ElementTree.SubElement(joint, "dynamics", dynamics)
+        if info.get("mimic_joint"):
+            ElementTree.SubElement(
+                joint,
+                "mimic",
+                {
+                    "joint": str(info["mimic_joint"]),
+                    "multiplier": str(float(info.get("mimic_multiplier", 1.0))),
+                    "offset": str(float(info.get("mimic_offset", 0.0))),
+                },
+            )
 
     ElementTree.ElementTree(robot).write(
         path,
@@ -169,6 +215,8 @@ python3 tools/validate_urdf.py "$validation_urdf"
 
     build_body = f"""cd "$(dirname "$0")"
 source /opt/ros/humble/setup.bash
+export LIBGL_ALWAYS_SOFTWARE=1
+export OGRE_RTT_MODE=Copy
 runtime_root="$PWD/.petasos_runtime"
 colcon --log-base "$runtime_root/log" build \
   --build-base "$runtime_root/build" \
@@ -257,6 +305,59 @@ def _matrix_multiply(left: list[float], right: list[float]) -> list[float]:
         for row in range(4)
         for column in range(4)
     ]
+
+
+def _rigid_matrix_inverse(matrix: list[float]) -> list[float]:
+    rotation_transpose = [
+        matrix[0], matrix[4], matrix[8],
+        matrix[1], matrix[5], matrix[9],
+        matrix[2], matrix[6], matrix[10],
+    ]
+    translation = [matrix[3], matrix[7], matrix[11]]
+    inverse_translation = [
+        -sum(rotation_transpose[row * 3 + column] * translation[column] for column in range(3))
+        for row in range(3)
+    ]
+    return [
+        rotation_transpose[0], rotation_transpose[1], rotation_transpose[2], inverse_translation[0],
+        rotation_transpose[3], rotation_transpose[4], rotation_transpose[5], inverse_translation[1],
+        rotation_transpose[6], rotation_transpose[7], rotation_transpose[8], inverse_translation[2],
+        0.0, 0.0, 0.0, 1.0,
+    ]
+
+
+def _base_footprint_joint_pose(
+    root_xyz: list[float],
+    root_rpy: list[float],
+    edited_tree: dict,
+) -> tuple[list[float], list[float]]:
+    frame = edited_tree.get("_base_footprint_frame") or {}
+    footprint_xyz = _finite_vector(frame.get("world_xyz"), 3) or [0.0, 0.0, 0.0]
+    footprint_rpy = None
+    if frame.get("orientation_manual"):
+        footprint_rpy = _finite_vector(frame.get("rpy"), 3)
+    if footprint_rpy is None and frame.get("orientation_manual"):
+        try:
+            footprint_yaw = float(frame.get("yaw") or 0.0)
+        except (TypeError, ValueError):
+            footprint_yaw = 0.0
+        if not math.isfinite(footprint_yaw):
+            footprint_yaw = 0.0
+        footprint_rpy = [0.0, 0.0, footprint_yaw]
+    if footprint_rpy is None:
+        # base_footprint is the ground-plane projection of base_link: keep the
+        # root yaw while removing roll, pitch and height.
+        footprint_rpy = [0.0, 0.0, float(root_rpy[2])]
+    world_from_footprint = _matrix_from_xyz_rpy(
+        footprint_xyz,
+        footprint_rpy,
+    )
+    world_from_root = _matrix_from_xyz_rpy(root_xyz, root_rpy)
+    footprint_from_root = _matrix_multiply(
+        _rigid_matrix_inverse(world_from_footprint),
+        world_from_root,
+    )
+    return _matrix_xyz_rpy(footprint_from_root)
 
 
 def _matrix_from_quaternion_xyz(
@@ -402,6 +503,16 @@ def _positive_joint_value(joint: dict, keys: tuple[str, ...], default: float) ->
     return float(default)
 
 
+def _optional_nonnegative_joint_value(joint: dict, key: str) -> float | None:
+    if key not in joint or joint.get(key) in (None, ""):
+        return None
+    try:
+        value = float(joint[key])
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) and value >= 0.0 else None
+
+
 def _prepare_moveit_readiness(joints: dict, links: dict) -> dict:
     """Validate and complete the control data needed by MoveIt/ros2_control."""
     _validate_joint_limits(joints)
@@ -453,8 +564,27 @@ def _prepare_moveit_readiness(joints: dict, links: dict) -> dict:
             ("max_acceleration", "acceleration_limit"),
             1.0,
         )
+        joint["max_deceleration"] = _optional_nonnegative_joint_value(
+            joint, "max_deceleration"
+        )
+        joint["max_jerk"] = _optional_nonnegative_joint_value(joint, "max_jerk")
+        command_interface = str(joint.get("command_interface") or "position")
+        if command_interface not in {"position", "velocity", "effort"}:
+            command_interface = "position"
+        state_interfaces = joint.get("state_interfaces") or ["position"]
+        state_interfaces = [
+            value for value in ("position", "velocity", "effort")
+            if value in state_interfaces
+        ]
+        joint["command_interface"] = command_interface
+        joint["state_interfaces"] = state_interfaces or ["position"]
 
-        initial = 0.0
+        try:
+            initial = float(joint.get("initial_position", 0.0))
+        except (TypeError, ValueError):
+            initial = 0.0
+        if not math.isfinite(initial):
+            initial = 0.0
         if joint_type in {"revolute", "prismatic"}:
             lower = float(joint["lower_limit"])
             upper = float(joint["upper_limit"])
@@ -469,6 +599,10 @@ def _prepare_moveit_readiness(joints: dict, links: dict) -> dict:
                 "velocity_limit": joint["velocity_limit"],
                 "effort_limit": joint["effort_limit"],
                 "max_acceleration": joint["max_acceleration"],
+                "max_deceleration": joint["max_deceleration"],
+                "max_jerk": joint["max_jerk"],
+                "command_interface": joint["command_interface"],
+                "state_interfaces": joint["state_interfaces"],
             }
         )
 
@@ -522,8 +656,9 @@ def _write_ros_package_files(
     robot_name: str,
     save_dir: str,
     fixed_frame: str = "world",
+    controller_groups: list[dict] | None = None,
 ) -> None:
-    if fixed_frame not in {"world", "base_link"}:
+    if fixed_frame not in {"world", "base_footprint", "base_link"}:
         raise ValueError(f"Unsupported RViz fixed frame: {fixed_frame}")
     os.makedirs(os.path.join(save_dir, "resource"), exist_ok=True)
     os.makedirs(os.path.join(save_dir, "launch"), exist_ok=True)
@@ -569,6 +704,16 @@ setup(
 )
 """
         )
+    controller_dependencies = {
+        str(group.get("type", "")).split("/", 1)[0]
+        for group in (controller_groups or [])
+        if "/" in str(group.get("type", ""))
+    }
+    controller_dependencies.add("joint_state_broadcaster")
+    dependency_lines = "\n".join(
+        f"  <exec_depend>{dependency}</exec_depend>"
+        for dependency in sorted(controller_dependencies)
+    )
     with open(os.path.join(save_dir, "package.xml"), "w", encoding="utf-8") as stream:
         stream.write(
             f"""<?xml version="1.0"?>
@@ -592,9 +737,11 @@ setup(
   <exec_depend>gazebo_ros</exec_depend>
   <exec_depend>gazebo_ros2_control</exec_depend>
   <exec_depend>controller_manager</exec_depend>
-  <exec_depend>joint_state_broadcaster</exec_depend>
-  <exec_depend>joint_trajectory_controller</exec_depend>
-  <export><build_type>ament_python</build_type></export>
+{dependency_lines}
+  <export>
+    <build_type>ament_python</build_type>
+    <gazebo_ros gazebo_model_path="${{prefix}}/.."/>
+  </export>
 </package>
 """
         )
@@ -602,7 +749,7 @@ setup(
         stream.write(
             f"""from launch_ros.actions import Node
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable
 from launch.substitutions import LaunchConfiguration
 from launch.conditions import IfCondition, UnlessCondition
 import xacro
@@ -658,6 +805,8 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        SetEnvironmentVariable(name="LIBGL_ALWAYS_SOFTWARE", value="1"),
+        SetEnvironmentVariable(name="OGRE_RTT_MODE", value="Copy"),
         gui_arg,
         robot_state_publisher_node,
         joint_state_publisher_node,
@@ -781,18 +930,240 @@ def _write_analysis(
         json.dump(moveit_readiness, stream, ensure_ascii=False, indent=2)
 
 
+def _controller_groups(joints_dict: dict, edited_tree: dict | None = None) -> list[dict]:
+    supported_types = {
+        "joint_trajectory_controller/JointTrajectoryController",
+        "position_controllers/JointGroupPositionController",
+        "velocity_controllers/JointGroupVelocityController",
+        "effort_controllers/JointGroupEffortController",
+        "diff_drive_controller/DiffDriveController",
+        "forward_command_controller/ForwardCommandController",
+        "position_controllers/GripperActionController",
+        "effort_controllers/GripperActionController",
+        "pid_controller/PidController",
+        "joint_state_broadcaster/JointStateBroadcaster",
+    }
+    movable = [
+        name for name, info in joints_dict.items()
+        if info.get("type") != "fixed"
+    ]
+    movable_set = set(movable)
+    claimed: set[str] = set()
+    # Gazebo support always creates this broadcaster, so a user controller must
+    # not overwrite the manager entry with the same YAML key.
+    used_names: set[str] = {"joint_state_broadcaster"}
+    groups: list[dict] = []
+    for index, raw in enumerate((edited_tree or {}).get("_controllers") or [], 1):
+        raw_name = str(raw.get("name") or f"controller_{index}")
+        name = "".join(
+            character if character.isalnum() or character == "_" else "_"
+            for character in raw_name
+        ).strip("_") or f"controller_{index}"
+        base_name = name
+        suffix = 2
+        while name in used_names:
+            name = f"{base_name}_{suffix}"
+            suffix += 1
+        joints = [
+            joint for joint in raw.get("joints") or []
+            if joint in movable_set and joint not in claimed
+        ]
+        if not joints:
+            continue
+        used_names.add(name)
+        claimed.update(joints)
+        controller_type = str(
+            raw.get("type") or "joint_trajectory_controller/JointTrajectoryController"
+        )
+        if controller_type not in supported_types:
+            controller_type = "joint_trajectory_controller/JointTrajectoryController"
+        settings = raw.get("settings") if isinstance(raw.get("settings"), dict) else {}
+        groups.append({
+            "name": name,
+            "type": controller_type,
+            "joints": joints,
+            "settings": copy.deepcopy(settings),
+            "color": str(raw.get("color") or ""),
+        })
+    unassigned = [joint for joint in movable if joint not in claimed]
+    if unassigned:
+        fallback = "arm_controller" if "arm_controller" not in used_names else "unassigned_controller"
+        groups.append({
+            "name": fallback,
+            "type": "joint_trajectory_controller/JointTrajectoryController",
+            "joints": unassigned,
+            "settings": {},
+        })
+    return groups
+
+
+def _apply_diff_drive_cad_wheel_radius(
+    groups: list[dict],
+    joints_dict: dict,
+    collision_meshes: dict[str, str],
+    mesh_dir: str,
+) -> None:
+    """Fill unconfirmed DiffDrive radius from wheel-link CAD meshes."""
+    for group in groups:
+        if group.get("type") != "diff_drive_controller/DiffDriveController":
+            continue
+        settings = group.setdefault("settings", {})
+        if settings.get("wheel_radius_manual"):
+            continue
+        radii = []
+        for joint_name in group.get("joints") or []:
+            info = joints_dict.get(joint_name, {})
+            filename = collision_meshes.get(str(info.get("child") or ""))
+            if not filename:
+                continue
+            path = os.path.join(mesh_dir, filename)
+            if not os.path.isfile(path):
+                continue
+            axis = np.asarray(info.get("axis") or [0.0, 0.0, 1.0], dtype=float)
+            norm = float(np.linalg.norm(axis))
+            if not math.isfinite(norm) or norm <= 1e-9:
+                continue
+            axis /= norm
+            vertices = np.asarray(_as_mesh(trimesh.load_mesh(path, file_type="stl")).vertices, dtype=float)
+            if not len(vertices):
+                continue
+            axial = np.outer(vertices @ axis, axis)
+            radius_mm = float(np.max(np.linalg.norm(vertices - axial, axis=1)))
+            if math.isfinite(radius_mm) and radius_mm > 1e-6:
+                radii.append(radius_mm / 1000.0)
+        if radii:
+            settings["wheel_radius"] = float(np.median(radii))
+            settings["wheel_radius_source"] = "cad_collision_mesh"
+
+
+def _normalize_diff_drive_wheel_axes(
+    groups: list[dict],
+    joints_dict: dict,
+) -> list[str]:
+    """Make positive wheel velocity point every axle in one parent-frame direction."""
+    flipped: list[str] = []
+    for group in groups:
+        if group.get("type") != "diff_drive_controller/DiffDriveController":
+            continue
+        axes = []
+        for name in group.get("joints") or []:
+            info = joints_dict.get(name, {})
+            axis = np.asarray(info.get("axis") or [0.0, 0.0, 1.0], dtype=float)
+            norm = float(np.linalg.norm(axis))
+            if not math.isfinite(norm) or norm <= 1e-9:
+                continue
+            axis /= norm
+            rpy = [float(value) for value in (info.get("rpy") or [0.0, 0.0, 0.0])]
+            rotation = np.asarray(
+                _matrix_from_xyz_rpy([0.0, 0.0, 0.0], rpy), dtype=float
+            ).reshape((4, 4))[:3, :3]
+            axes.append((name, axis, rotation @ axis))
+        if not axes:
+            continue
+        reference = axes[0][2]
+        # REP-103 assumes +X forward and +Z up. Prefer the axle sign whose
+        # bottom-point tangential velocity is +X, then align every wheel to it.
+        forward_score = float(np.dot(np.cross(reference, [0.0, 0.0, -1.0]), [1.0, 0.0, 0.0]))
+        if forward_score < -1e-9:
+            reference = -reference
+        for name, local_axis, parent_axis in axes:
+            if float(np.dot(reference, parent_axis)) < 0.0:
+                joints_dict[name]["axis"] = (-local_axis).tolist()
+                flipped.append(name)
+    return flipped
+
+
+def _prepare_diff_drive_joint_interfaces(
+    groups: list[dict],
+    joints_dict: dict,
+) -> None:
+    """Expose wheel position telemetry while retaining velocity feedback."""
+    for group in groups:
+        if group.get("type") != "diff_drive_controller/DiffDriveController":
+            continue
+        group.setdefault("settings", {}).setdefault("position_feedback", False)
+        for name in group.get("joints") or []:
+            info = joints_dict.get(name)
+            if not info:
+                continue
+            info["command_interface"] = "velocity"
+            info["state_interfaces"] = ["position", "velocity"]
+
+
 def _write_gazebo_support(
     joints_dict: dict,
     package_name: str,
     robot_name: str,
     save_dir: str,
+    controller_groups: list[dict] | None = None,
+    base_frame_id: str = "base_link",
 ) -> None:
     """Write Gazebo Classic launch and ros2_control controller configuration."""
+    def safe_float(value, default: float) -> float:
+        try:
+            result = float(value)
+        except (TypeError, ValueError):
+            return default
+        return result if math.isfinite(result) else default
+
+    def joint_y(name: str) -> float | None:
+        xyz = joints_dict.get(name, {}).get("xyz")
+        if not isinstance(xyz, (list, tuple)) or len(xyz) < 2:
+            return None
+        try:
+            value = float(xyz[1])
+        except (TypeError, ValueError):
+            return None
+        return value if math.isfinite(value) else None
+
+    def automatic_wheel_sides(names: list[str]) -> tuple[list[str], list[str]]:
+        positioned = [(name, joint_y(name)) for name in names]
+        if len(positioned) >= 2 and all(value is not None for _, value in positioned):
+            positioned.sort(key=lambda item: item[1])
+            split = max(1, len(positioned) // 2)
+            # ROS REP-103: +Y is left. Higher Y therefore belongs to LEFT.
+            return (
+                [name for name, _ in positioned[split:]],
+                [name for name, _ in positioned[:split]],
+            )
+        split = max(1, (len(names) + 1) // 2)
+        return names[:split], names[split:]
+
+    def automatic_wheel_separation(left: list[str], right: list[str]) -> float | None:
+        left_y = [joint_y(name) for name in left]
+        right_y = [joint_y(name) for name in right]
+        if not left_y or not right_y or any(value is None for value in left_y + right_y):
+            return None
+        separation = abs(
+            sum(left_y) / len(left_y) - sum(right_y) / len(right_y)
+        )
+        return separation if separation > 1e-9 else None
+
+    def wheel_axis_in_parent(name: str) -> np.ndarray:
+        info = joints_dict[name]
+        axis = np.asarray(info.get("axis") or [0.0, 0.0, 1.0], dtype=float)
+        rpy = [float(value) for value in (info.get("rpy") or [0.0, 0.0, 0.0])]
+        rotation = np.asarray(_matrix_from_xyz_rpy([0.0, 0.0, 0.0], rpy), dtype=float).reshape((4, 4))[:3, :3]
+        transformed = rotation @ axis
+        norm = float(np.linalg.norm(transformed))
+        if not math.isfinite(norm) or norm <= 1e-9:
+            raise ValueError(f"DiffDrive wheel joint '{name}' has an invalid axis")
+        return transformed / norm
+
     movable_joints = [
         name
         for name, info in joints_dict.items()
         if info.get("type") != "fixed"
     ]
+    groups = controller_groups or (
+        [{
+            "name": "arm_controller",
+            "type": "joint_trajectory_controller/JointTrajectoryController",
+            "joints": movable_joints,
+            "settings": {},
+        }]
+        if movable_joints else []
+    )
     config_dir = os.path.join(save_dir, "config")
     launch_dir = os.path.join(save_dir, "launch")
     os.makedirs(config_dir, exist_ok=True)
@@ -805,58 +1176,176 @@ def _write_gazebo_support(
         "    joint_state_broadcaster:",
         "      type: joint_state_broadcaster/JointStateBroadcaster",
     ]
-    if movable_joints:
-        controller_lines.extend(
-            [
-                "    arm_controller:",
-                "      type: joint_trajectory_controller/JointTrajectoryController",
+    if groups:
+        for group in groups:
+            controller_lines.extend([
+                f"    {group['name']}:",
+                f"      type: {group.get('type', 'joint_trajectory_controller/JointTrajectoryController')}",
+            ])
+        for group in groups:
+            group_joints = group["joints"]
+            controller_type = group.get(
+                "type", "joint_trajectory_controller/JointTrajectoryController"
+            )
+            settings = group.get("settings") or {}
+            command_interfaces = []
+            state_interfaces = []
+            for name in group_joints:
+                info = joints_dict[name]
+                command = info.get("command_interface", "position")
+                if command not in command_interfaces:
+                    command_interfaces.append(command)
+                for state in info.get("state_interfaces") or ["position"]:
+                    if state not in state_interfaces:
+                        state_interfaces.append(state)
+            controller_lines.extend([
                 "",
-                "arm_controller:",
+                f"{group['name']}:",
                 "  ros__parameters:",
-                "    joints:",
-            ]
-        )
-        controller_lines.extend(f"      - {name}" for name in movable_joints)
-        controller_lines.extend(
-            [
-                "    command_interfaces:",
-                "      - position",
-                "    state_interfaces:",
-                "      - position",
-                "      - velocity",
-                "    state_publish_rate: 50.0",
-                "    action_monitor_rate: 20.0",
-                "    allow_partial_joints_goal: false",
-            ]
-        )
+            ])
+            if controller_type == "diff_drive_controller/DiffDriveController":
+                if settings.get("wheel_sides_manual"):
+                    left = [name for name in settings.get("left_wheel_names") or [] if name in group_joints]
+                    right = [name for name in settings.get("right_wheel_names") or [] if name in group_joints]
+                else:
+                    left, right = automatic_wheel_sides(group_joints)
+                if not left or not right:
+                    raise ValueError(
+                        f"DiffDrive controller '{group['name']}' needs at least one LEFT and one RIGHT wheel joint"
+                    )
+                if settings.get("wheel_separation_manual"):
+                    wheel_separation = safe_float(settings.get("wheel_separation"), 0.0)
+                else:
+                    wheel_separation = automatic_wheel_separation(left, right) or 0.0
+                wheel_radius = safe_float(settings.get("wheel_radius"), 0.0)
+                if wheel_separation <= 0:
+                    raise ValueError(
+                        f"DiffDrive controller '{group['name']}' wheel separation could not be derived; enter a positive measured value"
+                    )
+                radius_confirmed = bool(
+                    settings.get("wheel_radius_manual")
+                    or settings.get("wheel_radius_source") == "cad_collision_mesh"
+                )
+                if wheel_radius <= 0 or not radius_confirmed:
+                    raise ValueError(
+                        f"DiffDrive controller '{group['name']}' needs a confirmed positive measured wheel radius"
+                    )
+                wheel_axes = [wheel_axis_in_parent(name) for name in left + right]
+                reference_axis = wheel_axes[0]
+                opposed = [
+                    name for name, axis in zip(left + right, wheel_axes)
+                    if float(np.dot(reference_axis, axis)) < -0.5
+                ]
+                if opposed:
+                    raise ValueError(
+                        f"DiffDrive wheel axes point in opposite parent-frame directions: {', '.join(opposed)}; flip those joint axes so one positive velocity drives every wheel forward"
+                    )
+                wheel_states = {
+                    name: set(joints_dict[name].get("state_interfaces") or ["position"])
+                    for name in left + right
+                }
+                has_position = all("position" in values for values in wheel_states.values())
+                has_velocity = all("velocity" in values for values in wheel_states.values())
+                requested_position_feedback = bool(settings.get("position_feedback", False))
+                if requested_position_feedback and has_position:
+                    position_feedback = True
+                elif has_velocity:
+                    position_feedback = False
+                else:
+                    raise ValueError(
+                        f"DiffDrive controller '{group['name']}' wheel joints must all expose the same position or velocity state interface"
+                    )
+                controller_lines.extend([
+                    "    left_wheel_names: [" + ", ".join(f'\"{name}\"' for name in left) + "]",
+                    "    right_wheel_names: [" + ", ".join(f'\"{name}\"' for name in right) + "]",
+                    f"    wheel_separation: {round(wheel_separation, 6)}",
+                    f"    wheel_radius: {round(wheel_radius, 6)}",
+                    f"    position_feedback: {str(position_feedback).lower()}",
+                    "    open_loop: false",
+                    "    enable_odom_tf: true",
+                    f"    base_frame_id: {base_frame_id}",
+                    "    odom_frame_id: odom",
+                ])
+            elif controller_type in {
+                "position_controllers/GripperActionController",
+                "effort_controllers/GripperActionController",
+            }:
+                joint = settings.get("joint") if settings.get("joint") in group_joints else group_joints[0]
+                controller_lines.extend([
+                    f"    joint: {joint}",
+                    f"    goal_tolerance: {safe_float(settings.get('goal_tolerance'), 0.01)}",
+                    f"    max_effort: {safe_float(settings.get('max_effort'), 0.0)}",
+                ])
+            elif controller_type == "pid_controller/PidController":
+                command_interface = str(settings.get("command_interface") or "position")
+                reference_interface = str(settings.get("reference_and_state_interface") or "position")
+                controller_lines.append("    dof_names:")
+                controller_lines.extend(f"      - {name}" for name in group_joints)
+                controller_lines.extend([
+                    f"    command_interface: {command_interface}",
+                    "    reference_and_state_interfaces:",
+                    f"      - {reference_interface}",
+                ])
+                for name in group_joints:
+                    controller_lines.extend([
+                        f"    gains.{name}:",
+                        f"      p: {safe_float(settings.get('p'), 1.0)}",
+                        f"      i: {safe_float(settings.get('i'), 0.0)}",
+                        f"      d: {safe_float(settings.get('d'), 0.0)}",
+                    ])
+            elif controller_type == "joint_state_broadcaster/JointStateBroadcaster":
+                controller_lines.append("    joints:")
+                controller_lines.extend(f"      - {name}" for name in group_joints)
+                controller_lines.extend([
+                    "    interfaces:",
+                    "      - position",
+                    "      - velocity",
+                    "      - effort",
+                ])
+            else:
+                controller_lines.append("    joints:")
+                controller_lines.extend(f"      - {name}" for name in group_joints)
+                if controller_type == "joint_trajectory_controller/JointTrajectoryController":
+                    controller_lines.append("    command_interfaces:")
+                    controller_lines.extend(f"      - {value}" for value in command_interfaces)
+                    controller_lines.append("    state_interfaces:")
+                    controller_lines.extend(f"      - {value}" for value in state_interfaces)
+                    controller_lines.extend([
+                        "    state_publish_rate: 50.0",
+                        "    action_monitor_rate: 20.0",
+                        "    allow_partial_joints_goal: false",
+                    ])
+                elif controller_type == "forward_command_controller/ForwardCommandController":
+                    interface_name = str(settings.get("command_interface") or "position")
+                    controller_lines.append(f"    interface_name: {interface_name}")
     Path(config_dir, "gazebo_controllers.yaml").write_text(
         "\n".join(controller_lines) + "\n",
         encoding="utf-8",
         newline="\n",
     )
 
-    spawner_nodes = """
-    arm_controller_spawner = Node(
+    spawner_nodes = "\n".join(
+        f'''    controller_spawner_{index} = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["arm_controller", "--controller-manager", "/controller_manager"],
+        arguments=["{group['name']}", "--controller-manager", "/controller_manager"],
         output="screen",
+    )'''
+        for index, group in enumerate(groups, 1)
     )
-""" if movable_joints else ""
-    spawner_actions = (
-        "[joint_state_broadcaster_spawner, arm_controller_spawner]"
-        if movable_joints
-        else "[joint_state_broadcaster_spawner]"
-    )
+    spawner_actions = "[joint_state_broadcaster_spawner" + "".join(
+        f", controller_spawner_{index}" for index in range(1, len(groups) + 1)
+    ) + "]"
     Path(launch_dir, "gazebo.launch.py").write_text(
         f"""import os
 
 import xacro
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, RegisterEventHandler
+from launch.actions import IncludeLaunchDescription, RegisterEventHandler, SetEnvironmentVariable
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import EnvironmentVariable
 from launch_ros.actions import Node
 
 
@@ -868,6 +1357,15 @@ def generate_launch_description():
         xacro_file,
         mappings={{"use_gazebo": "true"}},
     ).toxml()
+
+    gazebo_model_path = SetEnvironmentVariable(
+        name="GAZEBO_MODEL_PATH",
+        value=[
+            os.path.dirname(description_share),
+            os.pathsep,
+            EnvironmentVariable("GAZEBO_MODEL_PATH", default_value=""),
+        ],
+    )
 
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -909,6 +1407,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        gazebo_model_path,
         gazebo,
         robot_state_publisher,
         spawn_robot,
@@ -926,6 +1425,14 @@ def _collision_filename(link_name: str) -> str:
         for character in link_name
     ).strip("._")
     return f"{safe_name or 'link'}_collision.stl"
+
+
+def _visual_filename(link_name: str) -> str:
+    safe_name = "".join(
+        character if character.isalnum() or character in "._-" else "_"
+        for character in link_name
+    ).strip("._")
+    return f"{safe_name or 'link'}_visual.stl"
 
 
 def _as_mesh(loaded) -> trimesh.Trimesh:
@@ -1032,6 +1539,49 @@ def _write_grouped_collision_meshes(
     return collision_meshes
 
 
+def _write_grouped_visual_meshes(
+    additional_visuals: dict,
+    material_dict: dict,
+    source_mesh_dir: str,
+    output_mesh_dir: str,
+) -> dict[str, list[tuple]]:
+    """Bake link parts into one full-detail visual STL without decimation."""
+    grouped_visuals: dict[str, list[tuple]] = {}
+    for link_name, visual_parts in additional_visuals.items():
+        transformed_parts = []
+        for visual_info in visual_parts:
+            component_name = visual_info[0]
+            xyz = visual_info[2] if len(visual_info) > 2 else [0, 0, 0]
+            rpy = visual_info[3] if len(visual_info) > 3 else [0, 0, 0]
+            source_path = os.path.join(source_mesh_dir, component_name + ".stl")
+            if not os.path.isfile(source_path):
+                transformed_parts = []
+                break
+            mesh = _as_mesh(trimesh.load_mesh(source_path, file_type="stl"))
+            transform = np.asarray(
+                _matrix_from_xyz_rpy(
+                    [float(value) * 1000.0 for value in xyz],
+                    [float(value) for value in rpy],
+                ),
+                dtype=float,
+            ).reshape((4, 4))
+            mesh.apply_transform(transform)
+            transformed_parts.append(mesh)
+        if not transformed_parts:
+            continue
+        # Concatenation changes only storage; every source face and thin CAD
+        # feature is retained exactly for the rendered appearance.
+        combined = trimesh.util.concatenate(transformed_parts)
+        combined.remove_unreferenced_vertices()
+        filename = _visual_filename(link_name)
+        combined.export(os.path.join(output_mesh_dir, filename), file_type="stl")
+        material = (material_dict.get(link_name) or {}).get("material", "silver_default")
+        grouped_visuals[link_name] = [
+            (os.path.splitext(filename)[0], material, [0, 0, 0], [0, 0, 0])
+        ]
+    return grouped_visuals
+
+
 def export_project(
     state: dict,
     edited_tree: dict,
@@ -1039,8 +1589,11 @@ def export_project(
     project_dir: str,
     include_moveit: bool = False,
     output_root: str | None = None,
+    root_joint_mode: str | None = None,
 ) -> dict:
     robot_name = state["project_name"].lower()
+    if root_joint_mode not in {"world", "base_footprint", "none"}:
+        root_joint_mode = "world" if fix_to_world else "none"
     package_name = robot_name + "_description"
     moveit_package = robot_name + "_moveit_config"
     export_root = output_root or os.path.join(project_dir, "export")
@@ -1060,14 +1613,31 @@ def export_project(
             shutil.rmtree(save_dir)
     os.makedirs(save_dir, exist_ok=True)
 
+    component_inertial = copy.deepcopy(state["inertial"])
+    component_materials = copy.deepcopy(state["materials"])
+    export_colors = copy.deepcopy(state.get("colors", {}))
+    material_warnings = apply_material_overrides(
+        component_inertial,
+        component_materials,
+        export_colors,
+        edited_tree,
+    )
+    if material_warnings:
+        raise ValueError("물리 재질 적용 실패: " + " / ".join(material_warnings))
     struct = Structure.RobotStructure(
         copy.deepcopy(state["joints"]),
-        copy.deepcopy(state["inertial"]),
-        copy.deepcopy(state["materials"]),
+        component_inertial,
+        component_materials,
         copy.deepcopy(state.get("visual_transforms", {})),
     )
     struct.apply_tree_data(copy.deepcopy(edited_tree))
     struct.standardize_names()
+    controller_groups = _controller_groups(struct.joints, edited_tree)
+    _prepare_diff_drive_joint_interfaces(controller_groups, struct.joints)
+    normalized_diff_drive_axes = _normalize_diff_drive_wheel_axes(
+        controller_groups,
+        struct.joints,
+    )
     moveit_readiness = _prepare_moveit_readiness(
         struct.joints,
         struct.inertial,
@@ -1075,19 +1645,47 @@ def export_project(
 
     meshes_dir = os.path.join(save_dir, "meshes")
     os.makedirs(meshes_dir, exist_ok=True)
-    for path in glob(os.path.join(project_dir, "meshes", "*.stl")):
-        _copy_mesh_as_binary_stl(
-            path,
-            os.path.join(meshes_dir, os.path.basename(path)),
-        )
+    source_mesh_dir = os.path.join(project_dir, "meshes")
+    grouped_visuals = _write_grouped_visual_meshes(
+        struct.additional_visuals,
+        struct.materials,
+        source_mesh_dir,
+        meshes_dir,
+    )
     collision_meshes = _write_grouped_collision_meshes(
         struct.additional_visuals,
-        os.path.join(project_dir, "meshes"),
+        source_mesh_dir,
+        meshes_dir,
+    )
+    # Keep the original part meshes only for the exceptional link that could
+    # not be baked (for example, a missing source STL). Normal exports contain
+    # only one visual and one simplified collision STL per link.
+    for link_name, visual_parts in struct.additional_visuals.items():
+        if link_name in grouped_visuals:
+            continue
+        for visual_info in visual_parts:
+            component_name = visual_info[0]
+            source_path = os.path.join(source_mesh_dir, component_name + ".stl")
+            if os.path.isfile(source_path):
+                _copy_mesh_as_binary_stl(
+                    source_path,
+                    os.path.join(meshes_dir, component_name + ".stl"),
+                )
+    _apply_diff_drive_cad_wheel_radius(
+        controller_groups,
+        struct.joints,
+        collision_meshes,
         meshes_dir,
     )
 
     links_xyz: dict = {}
     root_origin_xyz, root_orientation_rpy = _root_link_pose(state, edited_tree)
+    if root_joint_mode == "base_footprint":
+        root_origin_xyz, root_orientation_rpy = _base_footprint_joint_pose(
+            root_origin_xyz,
+            root_orientation_rpy,
+            edited_tree,
+        )
     Write.write_urdf(
         struct.joints,
         links_xyz,
@@ -1097,13 +1695,17 @@ def export_project(
         robot_name,
         save_dir,
         True,
-        struct.additional_visuals,
+        {
+            link_name: grouped_visuals.get(link_name, visual_parts)
+            for link_name, visual_parts in struct.additional_visuals.items()
+        },
         fix_to_world,
         root_orientation_rpy,
         root_origin_xyz,
         collision_meshes,
+        root_joint_mode,
     )
-    Write.write_materials_xacro(state.get("colors", {}), robot_name, save_dir)
+    Write.write_materials_xacro(export_colors, robot_name, save_dir)
     Write.write_transmissions_xacro(struct.joints, robot_name, save_dir)
     Write.write_gazebo_xacro(
         struct.joints,
@@ -1117,15 +1719,37 @@ def export_project(
         package_name,
         robot_name,
         save_dir,
-        "world" if fix_to_world else "base_link",
+        {
+            "world": "world",
+            "base_footprint": "base_footprint",
+            "none": "base_link",
+        }[root_joint_mode],
+        controller_groups,
     )
     _write_gazebo_support(
         struct.joints,
         package_name,
         robot_name,
         save_dir,
+        controller_groups,
+        "base_footprint" if root_joint_mode == "base_footprint" else "base_link",
     )
     _write_analysis(state, struct, save_dir, moveit_readiness)
+    if normalized_diff_drive_axes:
+        axis_report = Path(save_dir, "analysis", "diff_drive_axis_normalization.json")
+        axis_report.write_text(
+            json.dumps(
+                {
+                    "normalized": True,
+                    "flipped_joint_axes": normalized_diff_drive_axes,
+                    "reason": "Aligned positive wheel velocity for REP-103 +X forward",
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+            newline="\n",
+        )
 
     moveit_dir = None
     if include_moveit and moveit_readiness["controlled_joint_count"]:
@@ -1138,11 +1762,14 @@ def export_project(
                 robot_name,
                 seed_urdf,
                 fix_to_world,
+                root_joint_mode,
             )
             generate_smoke_config(
                 Path(save_dir),
                 Path(seed_urdf),
                 Path(moveit_dir),
+                struct.joints,
+                controller_groups,
             )
         _write_portable_moveit_helpers(
             bundle_dir,
@@ -1169,4 +1796,5 @@ def export_project(
         "link_count": len(struct.inertial),
         "joint_count": len(struct.joints),
         "moveit_readiness": moveit_readiness,
+        "material_warnings": material_warnings,
     }

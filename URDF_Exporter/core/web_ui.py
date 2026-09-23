@@ -34,6 +34,18 @@ HTML_CONTENT = """
         /* Header */
         .header { background: var(--bg-panel); padding: 15px 30px; display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 10px 16px; justify-content: space-between; align-items: center; position: relative; border-bottom: 1px solid var(--border-color); box-shadow: 0 2px 5px rgba(0,0,0,0.5); z-index: 100;}
         .header h2 { margin: 0; min-width: 0; font-size: 20px; white-space: nowrap;}
+        .language-switcher {
+            display: inline-flex; align-items: center; flex: 0 0 auto; overflow: hidden;
+            padding: 3px; border: 1px solid #4b5358; border-radius: 6px; background: #202326;
+        }
+        .language-switcher button {
+            min-width: 70px; padding: 6px 10px; border: 0; border-radius: 4px;
+            background: transparent; color: #8f9aa1; font: 700 11px/1.2 'Segoe UI', sans-serif;
+            letter-spacing: 0.03em; cursor: pointer;
+        }
+        .language-switcher button:hover { color: #e5edf1; background: #343a3e; }
+        .language-switcher button.active { color: #fff; background: #356a85; }
+        .language-switcher button:focus-visible { outline: 2px solid #72c7ee; outline-offset: -2px; }
         .btn { background: var(--accent-blue); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; transition: 0.2s;}
         .btn:hover { background: #005999; }
         .header-icon-btn {
@@ -229,6 +241,10 @@ HTML_CONTENT = """
             flex: 0 0 auto; padding: 12px 14px; font-size: 14px; font-weight: bold;
             border-bottom: 1px solid var(--border-color); overflow-wrap: anywhere;
         }
+        .pane-section-header.joint-selected {
+            border-bottom-color: #327b9b; background: linear-gradient(90deg, #183846 0%, #20272b 100%);
+            color: #dff6ff;
+        }
         .pane-body {
             flex: 1 1 50%; min-height: 160px; max-height: none; overflow: auto; padding: 12px;
             border-bottom: 1px solid var(--border-color);
@@ -279,10 +295,10 @@ HTML_CONTENT = """
         }
         .preview-controls {
             position: absolute;
-            top: 48px;
+            top: 12px;
             right: 16px;
             width: 210px;
-            max-height: calc(100% - 96px);
+            max-height: calc(100% - 60px);
             overflow-y: auto;
             z-index: 22;
             background: rgba(20,20,20,0.78);
@@ -368,6 +384,24 @@ HTML_CONTENT = """
         .ground-origin-panel.is-complete:not(.is-picking) .ground-edge-toggle {
             display: none;
         }
+        .ground-origin-offset {
+            display: none; grid-column: 1 / -1; margin-top: 2px; padding-top: 6px;
+            border-top: 1px solid rgba(255,255,255,0.10);
+        }
+        .ground-origin-panel.is-complete .ground-origin-offset { display: block; }
+        .ground-origin-offset-title {
+            display: flex; align-items: baseline; justify-content: space-between;
+            gap: 6px; margin-bottom: 5px; color: #cbd5da; font-size: 9px; font-weight: 700;
+        }
+        .ground-origin-offset-title small { color: #87969d; font-size: 8px; font-weight: 400; }
+        .ground-origin-offset-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+        .ground-origin-offset-fields label { color: #9eb0b8; font-size: 9px; }
+        .ground-origin-offset-fields input {
+            width: 100%; box-sizing: border-box; margin-top: 2px; padding: 4px 5px;
+            border: 1px solid #4d5b62; border-radius: 4px; background: #20272b;
+            color: #eef5f7; font-size: 10px; font-variant-numeric: tabular-nums;
+        }
+        .ground-origin-offset-fields input:focus { border-color: #39bfff; outline: none; }
         .ground-origin-secondary {
             display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px;
             align-items: end; margin-top: 7px;
@@ -423,8 +457,22 @@ HTML_CONTENT = """
         .preview-actions { display: flex; gap: 6px; margin: 8px 0; }
         .mini-btn { flex: 1; background: #3b3b3b; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 5px; cursor: pointer; font-size: 11px; }
         .mini-btn:hover { background: #4a4a4a; }
-        .joint-control { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); }
+        .joint-control { margin-top: 10px; padding: 8px 5px 0; border-top: 1px solid rgba(255,255,255,0.1); border-radius: 5px; }
+        .joint-control.is-selected {
+            background: rgba(36, 139, 190, 0.13);
+            box-shadow: inset 3px 0 #31bdf5;
+        }
         .joint-title, .joint-value-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .joint-name-button {
+            min-width: 0; padding: 2px 4px; border: 0; border-radius: 3px;
+            background: transparent; color: #e8edf0; cursor: pointer;
+            font: inherit; text-align: left;
+        }
+        .joint-name-button:hover,
+        .joint-name-button:focus-visible {
+            color: #73d8ff; background: rgba(49, 189, 245, 0.13); outline: none;
+        }
+        .joint-control.is-selected .joint-name-button { color: #79ddff; font-weight: 700; }
         .joint-details-toggle {
             display: grid; grid-template-columns: 1fr 28px 1fr;
             align-items: center; gap: 6px; width: 100%; height: 24px;
@@ -533,6 +581,59 @@ HTML_CONTENT = """
             border-radius: 5px; background: rgba(255,255,255,0.035);
             color: #aeb8bd; font-size: 10px;
         }
+        .joint-property-card {
+            margin-bottom: 12px; padding: 10px; border: 1px solid #47545b;
+            border-radius: 7px; background: #20282c;
+        }
+        .joint-origin-toolbox {
+            margin-bottom: 10px; padding: 9px; border: 1px solid #397f9d;
+            border-left: 3px solid #44cbff; border-radius: 6px;
+            background: linear-gradient(180deg, #172e38 0%, #1d292f 100%);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.22);
+        }
+        .joint-origin-toolbox .hint-box { margin: 0 0 8px !important; padding: 8px; }
+        .joint-selection-hero {
+            display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 8px;
+            align-items: center; margin-bottom: 10px; padding: 10px;
+            border: 1px solid #4a606b; border-radius: 7px; background: #222d32;
+        }
+        .joint-selection-badge {
+            grid-row: 1 / 3; padding: 5px 7px; border-radius: 5px;
+            background: #116b91; color: #fff; font-size: 9px; font-weight: 800;
+        }
+        .joint-selection-hero strong {
+            min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            color: #fff; font-size: 13px;
+        }
+        .joint-selection-hero small {
+            min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            color: #9fc4d3; font-size: 9px;
+        }
+        .joint-property-title { margin-bottom: 10px; color: #f4f8fa; font-size: 13px; font-weight: 800; }
+        .joint-property-section { padding: 9px 0; border-top: 1px solid rgba(255,255,255,0.09); }
+        .joint-property-section:first-of-type { border-top: 0; padding-top: 0; }
+        .joint-property-section-title {
+            margin-bottom: 7px; color: #77d5ff; font-size: 9px; font-weight: 800; letter-spacing: 1px;
+        }
+        .joint-property-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+        .joint-property-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .joint-property-grid label { min-width: 0; color: #9fadb4; font-size: 9px; }
+        .joint-general-spacer { min-height: 1px; }
+        .joint-property-grid input, .joint-property-grid select { margin-top: 3px; }
+        .joint-property-readonly {
+            padding: 6px 7px; border: 1px solid #3f4b51; border-radius: 4px;
+            background: #1a2023; color: #cbd5da; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            font-size: 10px;
+        }
+        .joint-property-details { margin-top: 7px; border: 1px solid #3f4c52; border-radius: 5px; background: #1c2326; }
+        .joint-property-details > summary { padding: 7px 8px; color: #c8d5da; font-size: 10px; font-weight: 700; cursor: pointer; }
+        .joint-property-details-body { padding: 0 8px 8px; }
+        .joint-interface-checks { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 7px; }
+        .joint-interface-checks label { color: #c3d0d5; font-size: 10px; }
+        .joint-cad-transform-button {
+            width: 100%; margin-top: 7px; cursor: pointer; border-color: #587385;
+            background: #273943; color: #e8f7ff;
+        }
         .viz-pane { flex: 1; position: relative; overflow: auto; background-image: radial-gradient(#333 1px, transparent 1px); background-size: 20px 20px; padding: 20px; min-height: 100px;}
         
         /* Tree CSS - 간격 축소 및 중앙 정렬 */
@@ -583,17 +684,27 @@ HTML_CONTENT = """
             position: relative; min-width: 100%; height: 100%; min-height: 340px;
             padding-top: 24px; box-sizing: border-box;
         }
-        .patcher-toolbar {
-            position: sticky; top: 0; left: 0; z-index: 80; display: flex; align-items: center;
-            gap: 8px; min-height: 36px; padding: 7px 10px; box-sizing: border-box;
-            background: rgba(27,27,29,0.96); border: 1px solid #3d3d42; border-radius: 7px;
+        .patcher-controls {
+            position: sticky; top: 0; left: 0; z-index: 80; overflow: visible;
+            border-radius: 7px; background: #1b1b1d;
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
+        .patcher-toolbar {
+            position: relative; z-index: 2; display: flex; align-items: center;
+            gap: 8px; min-height: 36px; padding: 7px 10px; box-sizing: border-box;
+            background: rgba(27,27,29,0.96); border: 1px solid #3d3d42; border-radius: 7px;
+            box-shadow: none;
+        }
+        .patcher-controls.material-shelf-open .patcher-toolbar { border-radius: 7px; }
         .patcher-toolbar button {
             border: 1px solid #56565d; background: #34343a; color: #eee; border-radius: 4px;
             padding: 5px 9px; cursor: pointer; font-size: 10px; font-weight: bold;
         }
         .patcher-toolbar button:hover { background: #45454d; border-color: #1da1f2; }
+        .patcher-toolbar button.material-shelf-active {
+            border-color: #4fb8e5; color: #dff7ff; background: #174056;
+            box-shadow: inset 0 0 0 1px rgba(83,207,255,0.13), 0 0 8px rgba(83,207,255,0.18);
+        }
         .patcher-toolbar button.needs-attention {
             color: #ffe2a6; border-color: #a97927; background: #4a3c25;
             box-shadow: 0 0 7px rgba(226,166,58,0.42), inset 0 0 5px rgba(255,204,92,0.08);
@@ -602,19 +713,98 @@ HTML_CONTENT = """
             color: #fff0c9; border-color: #d39b39; background: #594727;
         }
         .patcher-summary { margin-left: auto; color: #b9c3cc; font-size: 10px; }
+        .patcher-material-shelf {
+            position: absolute; z-index: 95; top: calc(100% + 7px); left: 0; right: auto;
+            width: min(350px, calc(100vw - 48px)); max-height: min(330px, calc(100vh - 190px));
+            box-sizing: border-box; margin: 0; padding: 10px;
+            border: 1px solid #4d7e93; border-radius: 8px;
+            background: linear-gradient(180deg, #22333b 0%, #1d292f 100%);
+            box-shadow: 0 14px 32px rgba(0,0,0,0.58), inset 0 5px 12px rgba(0,0,0,0.12);
+        }
+        .patcher-material-shelf[hidden] { display: none; }
+        .patcher-material-shelf-head {
+            display: grid; grid-template-columns: 1fr auto; gap: 5px 8px;
+            align-items: center; margin-bottom: 8px;
+        }
+        .patcher-material-shelf-head strong { color: #dcf5ff; font-size: 11px; white-space: nowrap; }
+        .patcher-material-shelf-search {
+            grid-column: 1 / -1; width: 100%; min-width: 0; height: 28px; box-sizing: border-box;
+            padding: 3px 7px; border: 1px solid #4c7c91; border-radius: 4px;
+            background: #16242a; color: #eefaff; font-size: 11px;
+        }
+        .patcher-material-shelf-search:focus { outline: none; border-color: #53cfff; }
+        .patcher-material-shelf-hint { color: #8eb4c4; font-size: 8px; white-space: nowrap; }
+        .patcher-material-shelf-cards {
+            display: flex; flex-direction: column; flex-wrap: nowrap; gap: 5px; max-width: 100%;
+            max-height: 220px; overflow-x: hidden; overflow-y: auto;
+            padding: 1px 3px 2px 1px;
+            scrollbar-width: none;
+        }
+        .patcher-material-shelf-cards::-webkit-scrollbar { width: 0; height: 0; }
+        .patcher-material-card {
+            display: flex; flex: 0 0 auto; width: 100%; align-items: center; gap: 7px;
+            min-width: 0; min-height: 40px; box-sizing: border-box; padding: 6px 8px;
+            border: 1px solid #40545e; border-radius: 5px; background: #29353a;
+            color: #edf8fc; cursor: grab; user-select: none;
+        }
+        .patcher-material-card:hover {
+            border-color: #5dcdfb; background: #234655; box-shadow: 0 0 7px rgba(83,207,255,0.2);
+        }
+        .patcher-material-card.dragging { opacity: 0.5; }
+        .patcher-material-card .material-drag-copy strong { font-size: 10px; }
+        .patcher-material-card .material-drag-copy small { font-size: 8px; }
+        .patcher-material-add-card {
+            min-height: 36px; justify-content: center; border-style: dashed;
+            border-color: #4f91aa; color: #9ddfff; background: rgba(31,76,94,0.32);
+            font-size: 11px; font-weight: bold; cursor: pointer;
+        }
+        .patcher-material-add-card:hover {
+            border-color: #69d6ff; color: #e7faff; background: rgba(35,111,140,0.42);
+        }
+        .patcher-material-add-card span:first-child { font-size: 18px; line-height: 1; }
+        .patcher-material-create {
+            flex: 0 0 auto; width: 100%; display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(105px, 0.65fr);
+            gap: 7px; align-items: end; box-sizing: border-box; padding: 8px;
+            border: 1px solid #4d849b;
+            border-radius: 6px; background: #1b3039;
+        }
+        .patcher-material-create label {
+            display: flex; flex-direction: column; gap: 3px; min-width: 0;
+            color: #a9c2cd; font-size: 9px;
+        }
+        .patcher-material-create input {
+            width: 100%; height: 28px; box-sizing: border-box; padding: 4px 7px;
+            border: 1px solid #4c6976; border-radius: 4px; background: #17262c;
+            color: #f2fbff; font-size: 11px;
+        }
+        .patcher-material-create input[type="color"] { padding: 3px; cursor: pointer; }
+        .patcher-material-create-actions { display: flex; gap: 5px; }
+        .patcher-material-create-actions { grid-column: 1 / -1; }
+        .patcher-material-create-actions button {
+            height: 28px; padding: 4px 10px; border: 1px solid #4d7180; border-radius: 4px;
+            background: #2b424c; color: #eaf9ff; cursor: pointer; font-size: 10px;
+        }
+        .patcher-material-create-actions button:first-child {
+            border-color: #3b9b6a; background: #1e533b; color: #d8ffea;
+        }
+        .patcher-material-empty { padding: 18px 8px; color: #91a9b4; text-align: center; font-size: 10px; }
         .patcher-zoom-readout {
             min-width: 42px; color: #8fd8ff; font-size: 10px; text-align: center;
             font-variant-numeric: tabular-nums;
         }
         .patcher-validation {
-            margin: 8px 0 0; padding: 7px 10px; border-radius: 5px; font-size: 10px;
-            border: 1px solid #78561a; color: #ffd889; background: rgba(112,75,8,0.22);
+            position: absolute; top: 8px; left: 8px; right: 8px; z-index: 75;
+            margin: 0; padding: 7px 10px; border-radius: 5px; font-size: 10px;
+            border: 1px solid rgba(178,126,35,0.72); color: #ffe0a3;
+            background: rgba(66,45,12,0.58); backdrop-filter: blur(2px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.18); pointer-events: none;
         }
         .patcher-validation.ok {
-            border-color: #2f7440; color: #9fe0ac; background: rgba(36,111,52,0.18);
+            border-color: rgba(61,157,83,0.72); color: #b5edc0; background: rgba(20,78,37,0.52);
         }
         .patcher-viewport {
-            position: relative; width: 100%; height: calc(100% - 92px); min-height: 245px;
+            position: relative; width: 100%; height: calc(100% - 54px); min-height: 245px;
             margin-top: 8px; overflow: hidden; border: 1px solid #313a42; border-radius: 8px;
             background-color: #3d454a; cursor: grab; touch-action: none;
             background-image:
@@ -625,7 +815,11 @@ HTML_CONTENT = """
         .patcher-viewport.panning { cursor: grabbing; }
         .patcher-canvas {
             position: absolute; left: 0; top: 0; width: 4200px; height: 2600px;
-            transform-origin: 0 0; overflow: visible; will-change: transform;
+            transform-origin: 0 0; overflow: visible;
+        }
+        .patcher-node, .patcher-joint-label {
+            text-rendering: geometricPrecision;
+            -webkit-font-smoothing: antialiased;
         }
         .patcher-cables {
             position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible;
@@ -681,6 +875,51 @@ HTML_CONTENT = """
         .patcher-node.world-node.world-disabled {
             opacity: 0.32; filter: grayscale(0.75); box-shadow: none;
         }
+        .patcher-node.world-node.footprint-with-settings {
+            border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+            border-color: rgba(92,190,122,0.46);
+            border-bottom-color: transparent;
+            background: linear-gradient(180deg, #2b3337 0%, #293237 100%);
+            box-shadow: 0 6px 13px rgba(0,0,0,0.24);
+        }
+        .patcher-node.world-node.base-footprint-selected {
+            border-color: #58e8a0;
+            box-shadow: 0 0 0 3px rgba(88,232,160,0.24), 0 0 18px rgba(88,232,160,0.42);
+        }
+        .patcher-footprint-settings {
+            position: absolute; left: 42px; top: 126px; z-index: 20; width: 176px;
+            box-sizing: border-box; padding: 9px; border: 1px solid #4b5960;
+            border-top: 0; border-radius: 0 0 7px 7px; color: #dce5e9;
+            background: linear-gradient(180deg, #263035 0%, #222a2e 100%);
+            box-shadow: inset 0 8px 12px rgba(0,0,0,0.07), 0 7px 13px rgba(0,0,0,0.26);
+        }
+        .patcher-footprint-settings {
+            border-color: rgba(92,190,122,0.46);
+            border-top-color: transparent;
+        }
+        .patcher-footprint-settings.base-footprint-selected {
+            border-color: #58e8a0;
+            border-top-color: transparent;
+            box-shadow: 0 8px 18px rgba(88,232,160,0.22);
+        }
+        .patcher-footprint-settings-heading {
+            display: flex; align-items: center; justify-content: space-between; gap: 5px;
+            margin: 0 -2px 7px; padding: 1px 2px 6px;
+            border-bottom: 1px solid rgba(170,205,190,0.11);
+            color: #d7e7e0; font-size: 9px; font-weight: 700;
+        }
+        .patcher-footprint-settings-heading span:last-child { color: #9fb4ac; font-size: 8px; }
+        .patcher-footprint-offset-title {
+            display: flex; justify-content: space-between; margin-bottom: 4px;
+            color: #cbd5da; font-size: 8px; font-weight: 700;
+        }
+        .patcher-footprint-offset-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+        .patcher-footprint-offset-fields label { color: #9eb0b8; font-size: 8px; }
+        .patcher-footprint-offset-fields input {
+            width: 100%; box-sizing: border-box; margin-top: 2px; padding: 3px 4px;
+            border: 1px solid #4d5b62; border-radius: 4px; background: #1d2428;
+            color: #eef5f7; font-size: 9px;
+        }
         .patcher-world-fix {
             position: absolute; left: 42px; top: 22px; z-index: 18;
             width: 176px; height: 32px; box-sizing: border-box;
@@ -694,6 +933,11 @@ HTML_CONTENT = """
             background: rgba(76,175,80,0.2); box-shadow: 0 0 7px rgba(76,175,80,0.3);
         }
         .patcher-world-fix input { margin: 0; }
+        .patcher-world-fix select {
+            width: 164px; height: 24px; padding: 2px 6px; border: 1px solid #59666c;
+            border-radius: 4px; background: #20272b; color: #eef5f7; font-size: 10px;
+            cursor: pointer;
+        }
         .patcher-world-fix + .patcher-node.world-node {
             border-top-left-radius: 0; border-top-right-radius: 0;
         }
@@ -718,6 +962,79 @@ HTML_CONTENT = """
         }
         .patcher-node-ungroup:hover {
             border-color: #e6a23c; background: #4a3216; color: #fff;
+        }
+        .patcher-node-toggle {
+            flex: 0 0 auto; width: 24px; height: 14px; padding: 2px; border-radius: 999px;
+            border: 1px solid #16a34a; background: #22c55e;
+            cursor: pointer; box-sizing: border-box; display: inline-flex;
+            align-items: center; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+        }
+        .patcher-node-toggle .toggle-knob {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #ffffff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+            transform: translateX(10px);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0;
+        }
+        .patcher-node-toggle:hover {
+            box-shadow: 0 0 6px rgba(34, 197, 94, 0.7); transform: scale(1.08);
+        }
+        .patcher-node-toggle.is-disabled {
+            border-color: #555e68; background: #374151;
+        }
+        .patcher-node-toggle.is-disabled .toggle-knob {
+            background: #9ca3af;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+            transform: translateX(0px);
+        }
+        .patcher-node-toggle.is-disabled:hover {
+            border-color: #ef4444; background: #4b2328;
+            box-shadow: 0 0 6px rgba(239, 68, 68, 0.5); transform: scale(1.08);
+        }
+        .patcher-node-toggle.is-disabled:hover .toggle-knob {
+            background: #fca5a5;
+        }
+        .patcher-node.disabled {
+            opacity: 0.45;
+        }
+        .patcher-node.disabled:hover {
+            opacity: 0.85;
+        }
+        .patcher-node.disabled .link-box,
+        .link-box.disabled {
+            border-color: #555e66 !important;
+            border-top-color: #77838d !important;
+            background: #1c2024 !important;
+            box-shadow: none !important;
+            opacity: 0.6;
+        }
+        .joint-badge.disabled {
+            opacity: 0.6;
+            background: #25282d !important;
+            border-color: #586068 !important;
+            color: #9aa3ab !important;
+            text-decoration: line-through;
+        }
+        .patcher-node-state.disabled-state {
+            color: #ff7b7b !important;
+            font-weight: bold;
+        }
+        .patcher-cable.disabled {
+            stroke: #606872 !important;
+            stroke-dasharray: 6 4 !important;
+            opacity: 0.48 !important;
+            filter: none !important;
+        }
+        .patcher-joint-label.disabled {
+            opacity: 0.6;
+            background: #25282d !important;
+            border-color: #586068 !important;
+            color: #9aa3ab !important;
+            text-decoration: line-through;
+        }
+        .list-link-item.disabled {
+            opacity: 0.5;
+            background: #22252a;
         }
         .patcher-node-name-input {
             min-width: 0; flex: 1; height: 20px; box-sizing: border-box; padding: 1px 4px;
@@ -754,6 +1071,38 @@ HTML_CONTENT = """
         }
         .patcher-joint-label:hover, .patcher-joint-label.selected {
             border-color: #50c5ff; box-shadow: 0 0 9px rgba(0,170,255,0.7);
+        }
+        .patcher-joint-label.controller-pick {
+            border-color: #d95cff; background: #54235f;
+            box-shadow: 0 0 0 3px rgba(217,92,255,0.24), 0 0 12px rgba(217,92,255,0.7);
+        }
+        .patcher-controller-frame {
+            position: absolute; z-index: 8; box-sizing: border-box; pointer-events: none;
+            border: 2px solid var(--controller-color, #d95cff); border-radius: 14px;
+            background: var(--controller-fill, rgba(217,92,255,0.14));
+            box-shadow: inset 0 0 22px var(--controller-glow, rgba(217,92,255,0.12)),
+                        0 0 10px var(--controller-glow, rgba(217,92,255,0.28));
+        }
+        .patcher-controller-frame.selected {
+            border-width: 3px;
+            box-shadow: inset 0 0 28px var(--controller-fill), 0 0 18px var(--controller-color);
+        }
+        .patcher-controller-label {
+            position: absolute; left: 12px; top: -13px; height: 24px; max-width: 210px;
+            padding: 2px 10px; border: 1px solid var(--controller-color, #d95cff); border-radius: 12px;
+            background: var(--controller-label, #4b1f57); color: #fff; font-size: 9px; font-weight: 800;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            cursor: pointer; pointer-events: auto;
+        }
+        .patcher-controller-label:hover { border-color: #8fe9ff; background: #234c60; }
+        .patcher-controller-label.selected,
+        .patcher-controller-frame.selected .patcher-controller-label {
+            border-color: #ffffff; border-width: 2px;
+            box-shadow: 0 0 10px var(--controller-color, #d95cff), 0 0 4px #ffffff;
+            filter: brightness(1.25);
+        }
+        .patcher-controller-frame.label-bottom .patcher-controller-label {
+            top: auto; bottom: -13px;
         }
         .patcher-empty-note {
             position: absolute; left: 32px; top: 132px; width: 220px; color: #98a1aa;
@@ -885,6 +1234,33 @@ HTML_CONTENT = """
         
         /* Drag & Drop Common */
         .drag-over { outline: 2px dashed var(--accent-green) !important; outline-offset: -2px; background: #1e3a1f !important; box-shadow: 0 0 0 1px rgba(76,175,80,0.35) inset !important;}
+        .material-drop-target,
+        .patcher-node.material-drop-target .link-box {
+            outline: 2px dashed #53cfff !important; outline-offset: -3px;
+            background: #163947 !important;
+            box-shadow: 0 0 0 2px rgba(83,207,255,0.2), 0 0 18px rgba(83,207,255,0.42) !important;
+        }
+        .material-drag-card {
+            display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 9px 10px;
+            border: 1px dashed #4fb8e5; border-radius: 6px; color: #e9f8ff;
+            background: linear-gradient(135deg, #173b4b 0%, #24363e 100%);
+            cursor: grab; user-select: none;
+        }
+        .material-drag-card:hover {
+            border-color: #75d7ff; box-shadow: 0 0 0 2px rgba(83,207,255,0.12);
+        }
+        .material-drag-card:active { cursor: grabbing; }
+        .material-drag-card.dragging { opacity: 0.55; }
+        .material-drag-swatch {
+            width: 16px; height: 16px; flex: 0 0 auto; border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.72); box-shadow: 0 1px 4px rgba(0,0,0,0.42);
+        }
+        .material-drag-copy { min-width: 0; flex: 1; }
+        .material-drag-copy strong,
+        .material-drag-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .material-drag-copy strong { font-size: 11px; }
+        .material-drag-copy small { margin-top: 2px; color: #9bc7da; font-size: 9px; }
+        .material-drag-grip { color: #76d9ff; font-size: 15px; letter-spacing: -2px; }
         body.is-dragging .link-box,
         body.is-dragging .list-link-item,
         body.is-dragging .drag-over {
@@ -898,6 +1274,98 @@ HTML_CONTENT = """
         .form-group label { display: block; font-size: 11px; color: #aaa; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px;}
         .form-control { width: 100%; box-sizing: border-box; background: #333; border: 1px solid #555; color: white; padding: 6px; border-radius: 4px; font-size: 13px;}
         .form-control:focus { outline: none; border-color: var(--accent-blue); }
+        .physical-material-panel {
+            margin-top: 12px; padding: 10px; border: 1px solid #48606c;
+            border-radius: 6px; background: #202a30;
+        }
+        .physical-material-heading {
+            display: flex; justify-content: space-between; align-items: center;
+            gap: 8px; margin-bottom: 9px; color: #dff6ff; font-size: 12px;
+        }
+        .material-library-details {
+            margin-top: 10px; padding: 0; overflow: hidden;
+            border: 1px solid #526873; border-radius: 6px; background: #222c31;
+            box-shadow: 0 3px 9px rgba(0,0,0,0.18);
+        }
+        .material-library-details > summary {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 8px; padding: 8px 9px; border: 0;
+            border-radius: 5px; background: #29363d; color: #dff6ff;
+            font-size: 12px; font-weight: bold; cursor: pointer; list-style: none;
+            user-select: none;
+        }
+        .material-library-details > summary:hover { background: #30414a; }
+        .material-library-details > summary::-webkit-details-marker { display: none; }
+        .material-library-details > summary::after { content: '▼'; color: #91b6c7; font-size: 9px; }
+        .material-library-details[open] {
+            border-color: #4f8198; background: #20292e;
+            box-shadow: 0 0 0 1px rgba(54,169,221,0.08), 0 6px 14px rgba(0,0,0,0.24);
+        }
+        .material-library-details[open] > summary {
+            border-radius: 5px 5px 0 0; border-bottom: 1px solid #446675;
+            background: linear-gradient(180deg, #304650 0%, #293b43 100%);
+        }
+        .material-library-details[open] > summary::after { transform: rotate(180deg); }
+        .material-library-content {
+            padding: 10px; background: linear-gradient(180deg, #222e34 0%, #20282d 100%);
+            box-shadow: inset 0 5px 10px rgba(0,0,0,0.10);
+        }
+        .component-material-row {
+            display: grid; grid-template-columns: minmax(0, 1fr) minmax(118px, 0.9fr) 22px;
+            gap: 6px; align-items: center; padding: 6px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+        }
+        .component-material-row:last-child { border-bottom: 0; }
+        .component-material-copy { min-width: 0; }
+        .component-material-copy strong {
+            display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            color: #f1f5f9; font-size: 11px;
+        }
+        .component-material-copy small { display: block; color: #91a4ae; margin-top: 2px; }
+        .physical-material-picker-trigger {
+            display: flex; align-items: center; justify-content: space-between; gap: 6px;
+            text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden;
+        }
+        .physical-material-picker-trigger span:first-child {
+            min-width: 0; overflow: hidden; text-overflow: ellipsis;
+        }
+        .physical-material-picker-trigger span:last-child { color: #9eb4be; font-size: 9px; }
+        .physical-material-popover {
+            position: fixed; z-index: 12000; min-width: 270px; max-width: 380px;
+            padding: 7px; border: 1px solid #4f7283; border-radius: 7px;
+            background: #252c30; box-shadow: 0 12px 30px rgba(0,0,0,0.58);
+        }
+        .physical-material-popover-search {
+            position: sticky; top: 0; z-index: 2; width: 100%; box-sizing: border-box;
+            padding: 8px 9px; border: 1px solid #3aa5d5; border-radius: 5px;
+            background: #17242a; color: #f2fbff; font-size: 12px;
+        }
+        .physical-material-popover-search:focus {
+            outline: none; box-shadow: 0 0 0 2px rgba(58,165,213,0.18);
+        }
+        .physical-material-popover-results {
+            max-height: min(52vh, 430px); overflow-y: auto; margin-top: 6px;
+        }
+        .physical-material-popover-category {
+            padding: 8px 7px 4px; color: #70d6ff; font-size: 10px; font-weight: 800;
+        }
+        .physical-material-popover-option {
+            display: flex; width: 100%; box-sizing: border-box; align-items: center;
+            justify-content: space-between; gap: 9px; padding: 7px 8px;
+            border: 0; border-radius: 4px; background: transparent; color: #edf5f8;
+            text-align: left; cursor: pointer; font-size: 11px;
+        }
+        .physical-material-popover-option:hover,
+        .physical-material-popover-option.active { background: #176a93; color: #fff; }
+        .physical-material-popover-option small { flex: 0 0 auto; color: #a9bec7; }
+        .physical-material-popover-option.active small { color: #d8f3ff; }
+        .physical-material-popover-empty { padding: 18px 8px; color: #91a4ad; text-align: center; font-size: 11px; }
+        .material-library-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px;
+        }
+        .material-library-grid label { margin: 0; }
+        .material-library-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 8px; }
+        .material-library-actions button { cursor: pointer; }
         
         .empty-state { text-align: center; color: #666; margin-top: 20px; font-style: italic; line-height: 1.5; font-size:13px;}
         .hint-box { background: rgba(0, 122, 204, 0.1); border-left: 3px solid var(--accent-blue); padding: 10px; font-size: 12px; line-height: 1.4; margin-bottom: 10px;}
@@ -1127,7 +1595,7 @@ HTML_CONTENT = """
             <div class="modal-title">링크·조인트 이름 정렬</div>
             <div class="modal-desc" style="text-align:left;margin-bottom:10px;">
                 WORLD 루트부터 부모→자식 배선 순서로
-                <b>link_1, joint_1, link_2…</b> 형식으로 정리합니다.
+                <b>base_link, joint_1, link_1…</b> 형식으로 정리합니다.
                 분기가 있으면 현재 자식 배선 순서를 따릅니다.
             </div>
             <div id="naming-assistant-summary" style="font-size:12px;color:#aaa;"></div>
@@ -1144,7 +1612,7 @@ HTML_CONTENT = """
 
     <div id="standalone-import-modal" class="modal-overlay">
         <div class="modal-content standalone-import-content">
-            <div class="modal-title">불러오기</div>
+            <div id="standalone-import-title" class="modal-title">불러오기</div>
             <div class="import-mode-tabs">
                 <button id="import-mode-cad" class="import-mode-tab active"
                         onclick="setStandaloneImportMode('cad')">CAD 조립품 불러오기</button>
@@ -1152,6 +1620,11 @@ HTML_CONTENT = """
                         onclick="setStandaloneImportMode('workspace')">이전 작업 불러오기</button>
             </div>
             <div id="standalone-cad-import-panel">
+                <div id="standalone-reimport-note" class="modal-desc"
+                     style="display:none;text-align:left;margin-bottom:12px;padding:10px;border:1px solid #397b58;border-radius:6px;background:#173125;color:#bfe8cc;">
+                    수정된 STEP/CAD를 다시 선택하세요. 동일한 부품을 연결하여 현재 링크 그룹,
+                    조인트, 이름과 바닥면 설정을 유지하고 형상·물성·CAD 위치만 갱신합니다.
+                </div>
                 <div class="modal-desc" style="text-align:left;">
                     <b>Inventor IAM</b>, SolidWorks·Creo·CATIA 등의 조립품 또는
                     STEP, BREP, IGES, STL 형상을 선택하세요.<br>
@@ -1161,8 +1634,8 @@ HTML_CONTENT = """
                 </div>
                 <label style="font-size:12px; color:#aaa;">프로젝트 이름</label>
                 <input id="standalone-project-name" type="text" value="new_robot" autocomplete="off">
-                <div style="margin-top:16px; padding:12px; border:1px solid #4a6b8a; border-radius:7px; background:#17212b;">
-                    <div style="font-size:12px; color:#9ecfff; margin-bottom:10px;">
+                <div id="standalone-inventor-direct" style="margin-top:16px; padding:12px; border:1px solid #4a6b8a; border-radius:7px; background:#17212b;">
+                    <div id="standalone-inventor-direct-title" style="font-size:12px; color:#9ecfff; margin-bottom:10px;">
                         IPT를 따로 선택하지 않는 Inventor 직접 연결
                     </div>
                     <div class="modal-btns" style="margin:0; flex-wrap:wrap;">
@@ -1188,7 +1661,7 @@ HTML_CONTENT = """
                 </div>
                 <div id="standalone-import-status" class="standalone-import-status"></div>
                 <div class="modal-btns" style="margin-top:18px;">
-                    <button class="modal-btn modal-btn-primary" onclick="importStandaloneAssembly()">가져오기</button>
+                    <button id="standalone-import-submit" class="modal-btn modal-btn-primary" onclick="importStandaloneAssembly()">가져오기</button>
                     <button class="modal-btn modal-btn-secondary" onclick="closeStandaloneImport()">취소</button>
                 </div>
             </div>
@@ -1235,15 +1708,28 @@ HTML_CONTENT = """
         </div>
     </div>
     <input type="checkbox" id="fix-to-world" checked style="display:none;">
+    <input type="hidden" id="root-joint-mode" value="world">
     <div class="header">
         <h2>URDF 구조 병합 및 3D 프리뷰 에디터</h2>
         <div class="global-settings">
+            <div class="language-switcher" role="group" aria-label="Language / 언어" data-no-i18n>
+                <button id="language-en" type="button" onclick="setPetasosLanguage('en')">ENGLISH</button>
+                <button id="language-ko" type="button" onclick="setPetasosLanguage('ko')">한국어</button>
+            </div>
             <button id="standalone-import-button" class="btn header-icon-btn"
                     style="display:none;" onclick="openStandaloneImport()"
                     title="조립품 불러오기" aria-label="조립품 불러오기">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M3.5 6.5h6l2 2h9v9.5h-17z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
                     <path d="M3.5 9h17" fill="none" stroke="currentColor" stroke-width="1.7"/>
+                </svg>
+            </button>
+            <button id="standalone-reimport-button" class="btn header-icon-btn"
+                    style="display:none;" onclick="openStandaloneReimport()"
+                    title="CAD 업데이트 · 기존 편집 유지" aria-label="CAD 업데이트 · 기존 편집 유지">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M19 8a7 7 0 10.5 7.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                    <path d="M15.5 4.5H19V8M19.5 15.5H16V19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
             </button>
             <div class="header-workspace-switcher">
@@ -1312,7 +1798,7 @@ HTML_CONTENT = """
                 <div class="preview-controls">
                     <section id="ground-origin-panel" class="ground-origin-panel">
                         <div class="ground-origin-heading">
-                            <strong>기준 좌표 설정</strong>
+                            <strong>원점 좌표 설정</strong>
                             <span id="ground-origin-state" class="ground-origin-state">필수 설정</span>
                         </div>
                         <button id="ground-face-button" class="ground-face-btn primary" onclick="toggleGroundFacePick()">바닥면·원점 지정</button>
@@ -1335,6 +1821,26 @@ HTML_CONTENT = """
                                 <small>긴 모서리를 월드 X/Z축에 맞춤</small>
                             </span>
                         </label>
+                        <div id="ground-origin-offset" class="ground-origin-offset">
+                            <div class="ground-origin-offset-title">
+                                <span>모델 위치 보정</span>
+                                <small>ROS XYZ · mm</small>
+                            </div>
+                            <div class="ground-origin-offset-fields">
+                                <label>X
+                                    <input id="ground-offset-x" type="number" step="1" value="0"
+                                           onchange="setGroundOriginOffset('x', this.value)">
+                                </label>
+                                <label>Y
+                                    <input id="ground-offset-y" type="number" step="1" value="0"
+                                           onchange="setGroundOriginOffset('y', this.value)">
+                                </label>
+                                <label>Z
+                                    <input id="ground-offset-z" type="number" step="1" value="0"
+                                           onchange="setGroundOriginOffset('z', this.value)">
+                                </label>
+                            </div>
+                        </div>
                     </section>
                     <h3>보기 설정</h3>
                     <label class="preview-control-row"><input type="checkbox" checked onchange="toggleVisualMeshes(this.checked)"> Show Visual</label>
@@ -1380,7 +1886,7 @@ HTML_CONTENT = """
         <!-- 우측 속성/리스트 -->
         <div class="resizer-v" title="드래그해서 오른쪽 패널 폭 조절"></div>
         <div class="edit-pane">
-            <div class="pane-section-header">선택된 항목 속성</div>
+            <div id="selected-properties-header" class="pane-section-header">선택된 항목 속성</div>
             <div class="pane-body" id="panel-body">
                 <div class="hint-box">
                     💡 항목을 클릭하면 3D 뷰어에서 해당 부품이 <span style="color:#007acc; font-weight:bold;">파란색</span>으로 강조됩니다.
@@ -1399,15 +1905,613 @@ HTML_CONTENT = """
     </div>
 
     <script>
+        const PETASOS_LANGUAGE_KEY = 'petasos.ui.language';
+        let petasosLanguage = 'ko';
+        let petasosApplyingLanguage = false;
+        const petasosTextOriginals = new WeakMap();
+        const petasosAttributeOriginals = new WeakMap();
+        const PETASOS_TRANSLATED_ATTRIBUTES = ['title', 'aria-label', 'placeholder'];
+
+        const PETASOS_ENGLISH = Object.freeze({
+            '클릭하여 링크 및 조인트 비활성화 (3D 모델 숨김)': 'Click to deactivate link and joint (hide 3D model)',
+            '클릭하여 링크 및 조인트 활성화 (3D 모델 표시)': 'Click to activate link and joint (show 3D model)',
+            '활성화 상태 (클릭하여 비활성화 및 3D 모델 숨김)': 'Active state (Click to deactivate and hide 3D model)',
+            '비활성화 상태 (클릭하여 활성화 및 3D 모델 표시)': 'Deactivated state (Click to activate and show 3D model)',
+            '링크 비활성화됨 (클릭 시 활성화 및 3D 모델 표시)': 'Link Deactivated (Click to activate and show 3D model)',
+            '링크 활성화 중 (클릭 시 비활성화 및 3D 모델 숨김)': 'Link Active (Click to deactivate and hide 3D model)',
+            '조인트 비활성화됨 (클릭 시 활성화 및 3D 모델 표시)': 'Joint Deactivated (Click to activate and show 3D model)',
+            '조인트 활성화 중 (클릭 시 비활성화 및 3D 모델 숨김)': 'Joint Active (Click to deactivate and hide 3D model)',
+            '비활성': 'DISABLED',
+            '다른 이름으로 저장·불러오기': 'Save As / Load',
+            '같은 조립품의 편집 상태를 이름별로 여러 개 저장할 수 있습니다. 자동 저장은 별도로 계속 유지됩니다.': 'Save multiple named editing states for the same assembly. Autosave continues separately.',
+            '현재 이어서 작업 중': 'Currently continuing',
+            '현재 작업에 이어 저장': 'Save to current work',
+            '새 저장 작업 이름': 'New saved-work name',
+            '예: 카메라 장착 버전, 조인트 수정안 2': 'e.g. Camera mount version, joint revision 2',
+            '새 이름으로 저장': 'Save with a new name',
+            '저장된 작업 목록': 'Saved work',
+            '선택한 작업 불러오기': 'Load selected work',
+            '닫기': 'Close',
+            '링크·조인트 이름 정렬': 'Order link and joint names',
+            'WORLD 루트부터 부모→자식 배선 순서로': 'Starting at the WORLD root, follows parent-to-child connections',
+            '형식으로 정리합니다. 분기가 있으면 현재 자식 배선 순서를 따릅니다.': 'and renames items in this format. Branches follow the current child connection order.',
+            '정리 후 URDF 생성': 'Rename and generate URDF',
+            '현재 이름 유지하고 생성': 'Keep current names and generate',
+            '불러오기': 'Import',
+            'CAD 조립품 불러오기': 'Import CAD assembly',
+            '이전 작업 불러오기': 'Load previous work',
+            ', SolidWorks·Creo·CATIA 등의 조립품 또는 STEP, BREP, IGES, STL 형상을 선택하세요.': ', a SolidWorks, Creo, or CATIA assembly, or STEP, BREP, IGES, or STL geometry.',
+            '등의 조립품 또는': 'assembly, or',
+            '형상을 선택하세요.': 'geometry.',
+            'Inventor는 아래 직접 연결을 사용하면': 'With the direct Inventor connection below,',
+            'IPT를 하나씩 선택할 필요가 없습니다.': 'you do not need to select IPT files individually.',
+            '다른 CAD는': 'For other CAD systems,',
+            '조립 구조를 유지한 STEP AP242/AP214/AP203': 'STEP AP242/AP214/AP203 that preserves the assembly structure ',
+            '을 권장합니다. 부품 위치를 유지한 채 각각의 링크 후보로 분리합니다.': 'is recommended. Parts retain their positions and are separated into link candidates.',
+            '프로젝트 이름': 'Project name',
+            'IPT를 따로 선택하지 않는 Inventor 직접 연결': 'Direct Inventor connection without selecting IPT files',
+            '🔗 현재 열린 Inventor 조립품': '🔗 Currently open Inventor assembly',
+            '📁 원본 IAM 경로 선택': '📁 Select original IAM path',
+            '— 또는 파일 업로드 —': '— or upload files —',
+            '조립품·형상 파일': 'Assembly / geometry files',
+            '또는 조립품 프로젝트 폴더': 'Or assembly project folder',
+            '파일 업로드는 직접 연결을 사용할 수 없을 때의 대체 방법입니다. 이 경우 참조 부품이 있는 프로젝트 폴더 전체를 함께 선택하세요.': 'File upload is a fallback when direct connection is unavailable. Select the entire project folder containing all referenced parts.',
+            '가져오기': 'Import',
+            '취소': 'Cancel',
+            '조립품별로 이름을 붙여 저장했던 프리뷰 편집 작업을 선택하세요. 링크 그룹, 조인트, 바닥면과 뷰어 설정까지 저장 당시 상태로 불러옵니다.': 'Select a named preview editing session saved for an assembly. Link groups, joints, ground plane, and viewer settings are restored.',
+            '저장된 이전 작업': 'Saved previous work',
+            '⚠️ 조인트 정렬 확인': '⚠️ Confirm joint ordering',
+            '로봇 구조가 변경되어 조인트 이름이 순서대로 정렬되지 않았습니다.': 'The robot structure changed, so joint names are no longer sequential.',
+            '와 같이 순서대로 정리하시겠습니까?': 'in sequence?',
+            '✅ 네, 정리할게요': '✅ Yes, reorder',
+            '아니오, 그냥 저장': 'No, save as is',
+            '이 조인트의 이름을 추천대로 변경하시겠습니까?': 'Rename this joint as recommended?',
+            '✅ 네, 변경': '✅ Yes, rename',
+            '⏩ 건너뛰기': '⏩ Skip',
+            '❌ 중단': '❌ Stop',
+            'URDF 구조 병합 및 3D 프리뷰 에디터': 'URDF Structure Merge & 3D Preview Editor',
+            '조립품 불러오기': 'Import assembly',
+            'CAD 업데이트 · 기존 편집 유지': 'Update CAD · keep current edits',
+            'CAD 업데이트': 'Update CAD',
+            '수정된 STEP/CAD를 다시 선택하세요. 동일한 부품을 연결하여 현재 링크 그룹, 조인트, 이름과 바닥면 설정을 유지하고 형상·물성·CAD 위치만 갱신합니다.': 'Select the updated STEP/CAD file again. Matching parts keep the current link groups, joints, names, and ground settings while geometry, physical properties, and CAD poses are refreshed.',
+            '업데이트 적용': 'Apply update',
+            '현재 작업 · 클릭하여 저장 작업 전환': 'Current work · Click to switch saved work',
+            '현재 작업 선택': 'Select current work',
+            '현재 작업': 'Current work',
+            '새 작업': 'New work',
+            '저장된 작업': 'Saved work',
+            '저장된 작업을 읽는 중...': 'Loading saved work...',
+            '저장': 'Save',
+            '현재 작업 저장': 'Save current work',
+            '저장 · 현재 조립품 작업': 'Save · Current assembly work',
+            'URDF만 필요하면 기본 패키지, MoveIt 설정·검사까지 필요하면 export/ros_ws 작업공간을 선택하세요.': 'Choose the basic package for URDF only, or the export/ros_ws workspace for MoveIt setup and validation.',
+            '📦 출력 유형': '📦 Output type',
+            '출력 유형': 'Output type',
+            'ROS 2 기본 패키지': 'Basic ROS 2 package',
+            'MoveIt export/ros_ws + WSL 검사': 'MoveIt export/ros_ws + WSL validation',
+            'URDF 생성': 'Generate URDF',
+            '로봇 3D 뷰어': 'Robot 3D Viewer',
+            '좌클릭: 선택 · Ctrl+좌클릭: 다중 선택 · 더블클릭: 부품만 보기 · 우클릭/휠클릭 드래그: 카메라 이동 · 휠: 확대/축소': 'Left-click: select · Ctrl+left-click: multi-select · Double-click: isolate part · Right/middle drag: move camera · Wheel: zoom',
+            '원점 좌표 설정': 'Origin coordinates',
+            '필수 설정': 'Required',
+            '바닥면·원점 지정': 'Set ground plane & origin',
+            '로봇의 바닥면을 선택하여 월드 XYZ 원점을 확정합니다.': 'Select the robot ground plane to set the world XYZ origin.',
+            '모델 위쪽 축': 'Model up axis',
+            '자동축 복원': 'Restore automatic axis',
+            '바닥면의 긴 모서리를 기준으로 모델의 수평 방향까지 자동 정렬합니다.': 'Automatically aligns the model horizontally using the longest ground-plane edge.',
+            '바닥면 방향도 자동 정렬': 'Auto-align ground-plane direction',
+            '긴 모서리를 월드 X/Z축에 맞춤': 'Align longest edge to world X/Z axis',
+            '모델 위치 보정': 'Model position offset',
+            'ROS XYZ · mm': 'ROS XYZ · mm',
+            '보기 설정': 'View settings',
+            '선택한 부품': 'Selected parts',
+            '선택 부품의 링크를 하나로 그룹화': 'Group selected parts into one link',
+            '드래그해서 뷰어와 트리 높이 조절': 'Drag to resize viewer and tree',
+            '로봇 구조 트리': 'Robot Structure Tree',
+            '🎯 선택 링크 다시 찾기': '🎯 Find selected link',
+            '드래그해서 오른쪽 패널 폭 조절': 'Drag to resize right panel',
+            '선택된 항목 속성': 'Selected Item Properties',
+            '💡 항목을 클릭하면 3D 뷰어에서 해당 부품이': '💡 Click an item to highlight that part in',
+            '파란색': 'blue ',
+            '으로 강조됩니다.': 'in the 3D viewer.',
+            '링크 리스트': 'Link List',
+            '링크 카드를 드래그하여 다른 링크에 부품을 합칠 수 있습니다.': 'Drag a link card onto another to merge its parts.',
+            '설정 완료': 'Complete',
+            '✕ 지정 취소': '✕ Cancel selection',
+            '변경': 'Change',
+            '세부 설정 접기': 'Collapse details',
+            '세부 설정 펼치기': 'Expand details',
+            '연속 회전 · 최소/최대 제한 없음': 'Continuous rotation · no minimum/maximum limit',
+            '미리보기 조작 범위 · URDF 회전 제한 아님': 'Preview control range · not a URDF rotation limit',
+            '미지정': 'Not set',
+            '최소°': 'Minimum°',
+            '최대°': 'Maximum°',
+            '정밀 CAD 후보 없음 — 메쉬 추정 사용': 'No precise CAD candidate — using mesh estimate',
+            '정밀 CAD 자석에 붙었습니다.': 'Snapped to a precise CAD feature.',
+            '✕ 조인트 위치 지정 취소': '✕ Cancel joint placement',
+            '🎯 3D에서 조인트 중심·축 다시 찍기': '🎯 Pick joint center & axis again in 3D',
+            '1/2 부모 연결점': '1/2 Parent connection point',
+            '2/2 자식 연결점': '2/2 Child connection point',
+            '바닥면 지정 대기': 'Waiting for ground-plane selection',
+            '이미 같은 링크에 포함된 부품입니다': 'Parts are already in the same link',
+            '💡 구조가 변경되었습니다!': '💡 Structure changed!',
+            '조인트 이름을 순서대로(joint_1...) 자동 재정렬하시겠습니까?': 'Automatically reorder joint names (joint_1...)?',
+            '네, 정리할게요': 'Yes, reorder',
+            '아니오': 'No',
+            '링크': 'Link',
+            '미연결 링크': 'Unconnected link',
+            '조인트': 'Joint',
+            '이 이름으로 정렬': 'Apply this naming order',
+            '중복된 조인트 이름은 URDF에서 사용할 수 있어 먼저 정리해야 합니다.': 'Duplicate joint names cannot be used in URDF and must be resolved first.',
+            '중복 이름이 있어 현재 이름 사용 불가': 'Current names unavailable because duplicates exist',
+            '▦ 자동 정렬': '▦ Auto layout',
+            '↕ 이름 정렬': '↕ Order names',
+            '⊙ 전체 보기': '⊙ Fit all',
+            '▣ 그룹화': '▣ Group',
+            '선택 병합': 'Merge selected',
+            '그룹 해제': 'Ungroup',
+            '✂ 선택 배선 끊기': '✂ Disconnect selected',
+            '로봇 팔처럼 바닥에 고정된 모델일 경우 체크하세요. 모바일 로봇이면 해제합니다.': 'Enable for floor-mounted models such as robot arms; disable for mobile robots.',
+            'world_joint 생성': 'Create world_joint',
+            'base_footprint_joint 생성': 'Create base_footprint_joint',
+            '루트 조인트 없음': 'No root joint',
+            '◎ BASE FOOTPRINT 위치 지정': '◎ Set BASE FOOTPRINT position',
+            '◎ BASE FOOTPRINT 위치 재설정': '◎ Reset BASE FOOTPRINT position',
+            'BASE FOOTPRINT 설정': 'BASE FOOTPRINT settings',
+            '위치 선택 중': 'Selecting position',
+            '위치 필요': 'Position required',
+            '✕ 위치 지정 취소': '✕ Cancel position selection',
+            '◎ 위치 다시 선택': '◎ Select position again',
+            '◎ 3D에서 위치 선택': '◎ Select position in 3D',
+            '기준 좌표는 유지하고 BASE FOOTPRINT 위치만 별도로 설정합니다.': 'Keeps the reference coordinates and configures only the BASE FOOTPRINT position.',
+            '위치 지정 완료': 'Position set',
+            '위치 미지정': 'Position not set',
+            '루트를 직접 연결하세요': 'Connect the root link',
+            '기준 프레임 연결 없음': 'No reference-frame connection',
+            '루트 링크를 WORLD 또는 BASE FOOTPRINT 기준 프레임에 연결합니다.': 'Connect the root link to the WORLD or BASE FOOTPRINT reference frame.',
+            '루트를 직접 연결하세요': 'Connect the root manually',
+            '루트 선택 가능 · 바닥 고정 꺼짐': 'Root selectable · ground fixation off',
+            'WORLD 출력 포트': 'WORLD output port',
+            '더블클릭하면 WORLD 배선을 끊습니다': 'Double-click to disconnect WORLD',
+            'WORLD에서 루트 링크 연결을 시작합니다': 'Start connecting the root link from WORLD',
+            '분리': 'Separate',
+            '묶인 부품을 각각의 카드로 그룹 해제': 'Ungroup bundled parts into individual cards',
+            '묶음 후보': 'Grouping candidate',
+            '미연결': 'Unconnected',
+            '더블클릭하면 이 배선을 끊습니다': 'Double-click to disconnect this connection',
+            '부모 링크의 출력 포트를 연결하세요': 'Connect the parent link output port',
+            '새 자식 링크를 연결합니다': 'Connect a new child link',
+            '더블클릭하여 링크 이름 수정': 'Double-click to rename link',
+            '링크 이름 수정': 'Rename link',
+            '링크가 하나뿐입니다. 조립품을 불러오면 이곳에 링크 노드가 표시됩니다.': 'There is only one link. Import an assembly to display link nodes here.',
+            '✕ 그룹화 취소': '✕ Cancel grouping',
+            'fixed 조인트': 'fixed joint',
+            '움직이지 않는 고정 연결이므로 축·리밋·effort·velocity 설정이 필요하지 않습니다.': 'This is a rigid connection, so axis, limits, effort, and velocity settings are unnecessary.',
+            'URDF 동작 설정': 'URDF motion settings',
+            '최소 이동 (m)': 'Minimum travel (m)',
+            '최대 이동 (m)': 'Maximum travel (m)',
+            '연속 회전이므로 lower/upper를 URDF에 출력하지 않습니다.': 'Continuous joints do not output lower/upper limits in URDF.',
+            '최대 힘': 'Maximum effort',
+            '최대 속도': 'Maximum velocity',
+            '왼쪽 구조 트리나 아래 리스트에서 항목을 클릭하여 상세 속성을 편집하세요.': 'Click an item in the structure tree or list to edit its properties.',
+            '왼쪽 구조 트리나 아래 리스트에서 항목을 클릭하여': 'Click an item in the structure tree or list to',
+            '상세 속성을 편집하세요.': 'edit its properties.',
+            '✅ URDF 공식 링크로 확정됨': '✅ Confirmed as an official URDF link',
+            '⚠️ 아직 그룹화/확정되지 않은 부품': '⚠️ Part not yet grouped/confirmed',
+            '대표 링크 이름 (URDF)': 'Primary link name (URDF)',
+            '↗ 이 링크 그룹 해제': '↗ Ungroup this link',
+            '메쉬 면 중심/법선': 'Mesh face center/normal',
+            '아직 3D에서 다시 지정하지 않았습니다.': 'Not yet reassigned in 3D.',
+            '조인트 원점·축 재설정': 'Reset joint origin & axis',
+            '↺ 조립품 원래 자세로 복원': '↺ Restore original assembly pose',
+            '클릭 판정에 남길 부품': 'Parts available for picking',
+            '겹친 자석 선택': 'Select overlapping snap',
+            '마우스를 원·호 위로 옮기세요': 'Move the pointer over a circle or arc',
+            '◀ 이전 자석': '◀ Previous snap',
+            '다음 자석 ▶': 'Next snap ▶',
+            '↕ 조인트 축 방향 뒤집기': '↕ Flip joint axis',
+            '👁 자식 링크만 보기': '👁 Show child link only',
+            '🌐 전체 부품 보기': '🌐 Show all parts',
+            '⚙️ 이 연결을 실제 조인트로 사용': '⚙️ Use this connection as an actual joint',
+            '조인트 이름': 'Joint name',
+            '동작 메커니즘 (Type)': 'Motion mechanism (Type)',
+            '회전/이동 축 (Axis)': 'Rotation/translation axis (Axis)',
+            'Fusion 축 후보': 'Fusion axis candidates',
+            '조인트 원점 회전 RPY (deg)': 'Joint-origin rotation RPY (deg)',
+            '✂ 이 조인트 배선 끊기': '✂ Disconnect this joint',
+            '숫자를 입력하세요.': 'Enter a number.',
+            '0보다 큰 값을 입력하세요.': 'Enter a value greater than 0.',
+            '최소값은 최대값보다 작아야 합니다.': 'The minimum must be less than the maximum.',
+            '최대값은 최소값보다 커야 합니다.': 'The maximum must be greater than the minimum.',
+            'RViz 실행 중': 'RViz running',
+            'RViz 다시 열기': 'Reopen RViz',
+            '동기화·빌드 중...': 'Syncing & building...',
+            'MoveIt 상태 확인 중': 'Checking MoveIt status',
+            'ROS 2 패키지 다운로드': 'Download ROS 2 package',
+            'RViz 열기': 'Open RViz',
+            'RViz 종료': 'Stop RViz',
+            'MoveIt 설정 및 검사': 'MoveIt setup and validation',
+            'Assistant에서 설정한 뒤 같은 작업공간을 정규화하고 실제 움직임을 검사합니다.': 'Configure in Assistant, then normalize the same workspace and validate actual motion.',
+            '1. Assistant 설정': '1. Configure in Assistant',
+            '2. 정규화·실행': '2. Normalize & run',
+            '3. 움직임 자동검사': '3. Automatic motion test',
+            'MoveIt 종료': 'Stop MoveIt',
+            'URDF 생성이 완료되었습니다': 'URDF generation complete',
+            '저장 위치 · ROS 2 작업공간': 'Save location · ROS 2 workspace',
+            'RViz에서 모델 확인': 'Inspect model in RViz',
+            'Ubuntu 22.04 WSL로 최신 패키지를 동기화하고 RViz를 실행합니다.': 'Sync the latest package to Ubuntu 22.04 WSL and launch RViz.'
+        });
+
+        const PETASOS_ENGLISH_PATTERNS = [
+            [/^현재 저장 작업: (.+) · 클릭하여 다른 작업으로 전환$/, 'Current saved work: $1 · Click to switch'],
+            [/^현재 프로젝트: (.+) · 클릭하여 저장 작업 불러오기$/, 'Current project: $1 · Click to load saved work'],
+            [/^현재 작업 (.+) · 저장 작업 선택$/, 'Current work $1 · Select saved work'],
+            [/^저장 · 현재 작업: (.+)$/, 'Save · Current work: $1'],
+            [/^'(.+)' 작업으로 전환할까요\?$/, "Switch to '$1'?"],
+            [/^'(.+)' 저장 작업을 현재 상태로 덮어쓸까요\?$/, "Overwrite '$1' with the current state?"],
+            [/^'(.+)' 작업을 불러올까요\? 현재 화면은 선택한 저장 상태로 바뀝니다\.$/, "Load '$1'? The current screen will be replaced with the selected saved state."],
+            [/^'(.+)' 불러오는 중\.\.\.$/, "Loading '$1'..."],
+            [/^'(.+)' 저장 중\.\.\.$/, "Saving '$1'..."],
+            [/^'(.+)' 저장에 실패했습니다\.$/, "Failed to save '$1'."],
+            [/^'(.+)' 작업을 저장했습니다\.$/, "Saved '$1'."],
+            [/^'(.+)'에 이어 저장하는 중\.\.\.$/, "Saving updates to '$1'..."],
+            [/^'(.+)' 이어 저장에 실패했습니다\.$/, "Failed to save updates to '$1'."],
+            [/^'(.+)'에 현재 작업을 이어 저장했습니다\.$/, "Saved the current work to '$1'."],
+            [/^(\d+)개 부품과 (\d+)개 조인트를 Inventor에서 가져왔습니다\.$/, 'Imported $1 parts and $2 joints from Inventor.'],
+            [/^(\d+)개 부품과 (\d+)개 조인트를 가져왔습니다\.$/, 'Imported $1 parts and $2 joints.'],
+            [/^가져오기 완료 · (\d+)개 확인 항목이 있습니다\.$/, 'Import complete · $1 items need review.'],
+            [/^저장된 바닥면: (.+)$/, 'Saved ground plane: $1'],
+            [/^허용 범위 (.+)° ~ (.+)°$/, 'Allowed range $1° to $2°'],
+            [/^리밋 지정 중 · 최소 (.+) \/ 최대 (.+)$/, 'Setting limits · min $1 / max $2'],
+            [/^현재 (.+)° → 최소$/, 'Current $1° → minimum'],
+            [/^현재 (.+)° → 최대$/, 'Current $1° → maximum'],
+            [/^(.+) 링크만 표시합니다\. 내부 면을 선택한 뒤 전체 보기를 누르세요\.$/, 'Showing only link $1. Select an internal face, then click Show all.'],
+            [/^(.+) 집중 보기 해제 · 전체 부품 보기$/, 'Exit $1 focus · show all parts'],
+            [/^(.+) 부품만 집중 보기 · 다시 더블클릭하면 전체 보기$/, 'Focus on part $1 · double-click again to show all'],
+            [/^🎯 선택 링크 다시 찾기: (.+)$/, '🎯 Find selected link: $1'],
+            [/^(.+) 링크를 트리 중앙으로 이동$/, 'Center link $1 in the tree'],
+            [/^원점 지정 완료: (.+)$/, 'Origin set: $1'],
+            [/^이 부품만 화면과 클릭 판정에 남김: (.+)$/, 'Only this part remains visible and pickable: $1'],
+            [/^자식 링크의 (\d+)개 부품만 화면과 클릭 판정에 남김$/, 'Only $1 child-link parts remain visible and pickable'],
+            [/^(.+) · 이 부품만 판정: (.+)$/, '$1 · Pick only this part: $2'],
+            [/^(.+) · (\d+)개 부품에서 판정$/, '$1 · Pick from $2 parts'],
+            [/^겹친 자석 (\d+)개 — 목록에서 안쪽 원·호를 직접 고르세요\.$/, '$1 overlapping snaps — select the inner circle/arc from the list.'],
+            [/^(.+) 부품만 남겼습니다\. 원하는 원·호로 마우스를 옮기세요\.$/, 'Only part $1 remains. Move the pointer over the desired circle or arc.'],
+            [/^자식 링크의 (\d+)개 부품만 남겼습니다\. 겹친 후보는 아래 목록에서 고르세요\.$/, 'Only $1 child-link parts remain. Select overlapping candidates below.'],
+            [/^부품 (\d+)개 선택 · 우클릭하여 한 링크로 그룹화$/, '$1 parts selected · right-click to group into one link'],
+            [/^(.+) 선택 · 소속 링크: (.+)$/, '$1 selected · link: $2'],
+            [/^선택 부품 (\d+)개 · 링크 (\d+)개$/, '$1 selected parts · $2 links'],
+            [/^선택한 (\d+)개 링크를 하나로 그룹화$/, 'Group the $1 selected links into one'],
+            [/^연결 링크 (\d+)개 · 조인트 (\d+)개(.*)$/, '$1 connected links · $2 joints$3'],
+            [/^배선 완료 · 링크 (\d+)개 \/ 조인트 (\d+)개$/, 'Connections complete · $1 links / $2 joints'],
+            [/^링크 (\d+) · 배선 (\d+) · 미연결 (\d+)$/, 'Links $1 · connections $2 · unconnected $3'],
+            [/^(.+) 링크 노드$/, '$1 link node'],
+            [/^(.+) 새 분기 출력 포트$/, '$1 new branch output port'],
+            [/^(.+) 입력 포트$/, '$1 input port'],
+            [/^(.+) 출력 포트$/, '$1 output port'],
+            [/^선택 (\d+)개 병합$/, 'Merge $1 selected'],
+            [/^그룹화 선택 (\d+)개 · 병합 후 남을 링크: (.+)$/, '$1 selected for grouping · surviving link: $2'],
+            [/^놓으면 (.+) 링크에 합쳐집니다\.$/, 'Drop to merge into link $1.'],
+            [/^총 (\d+)개 링크$/, '$1 links total'],
+            [/^(.+) 링크 이름$/, '$1 link name'],
+            [/^링크 이름 '(.+)'은 이미 사용 중입니다\.$/, "Link name '$1' is already in use."],
+            [/^WORLD 루트 미지정 · 미연결 링크 (\d+)개$/, 'WORLD root not set · $1 unconnected links'],
+            [/^(.+)로 연결된 (.+)$/, '$2 connected to $1'],
+            [/^(.+) → (.+) 분기 출력 (\d+)$/, '$1 → $2 branch output $3'],
+            [/^자식 링크 전체 \((\d+)개 부품\)$/, 'Entire child link ($1 parts)'],
+            [/^최대 힘 \((.+)\)$/, 'Maximum effort ($1)'],
+            [/^최대 속도 \((.+)\)$/, 'Maximum velocity ($1)'],
+            [/^자석 중심: (.+) · 클릭하면 이 점이 조인트 원점, 면의 법선이 축이 됩니다\.$/, 'Snap center: $1 · Click to use this point as the joint origin and the face normal as its axis.'],
+            [/^자석 중심: (.+) · 클릭하면 월드 XYZ 0,0,0이 됩니다\.$/, 'Snap center: $1 · Click to set world XYZ to 0,0,0.'],
+            [/^원점 지정 완료: (.+)$/, 'Origin set: $1'],
+            [/^1\/2 부모 연결점 저장 완료: (.+) · 이제 2\/2 자식 연결점을 선택하세요\.$/, '1/2 parent connection saved: $1 · Now select the 2/2 child connection point.'],
+            [/^완료: 부모·자식 연결 프레임을 결합했습니다\. 두 연결점 간격 (.+) m · 조인트 원점은 두 점의 중앙입니다\.$/, 'Complete: combined the parent and child connection frames. Distance: $1 m · The joint origin is midway between the points.'],
+            [/^완료: (.+) m · 빨강 X\/초록 Y는 평면 안, 파랑 Z는 면 법선입니다\.$/, 'Complete: $1 m · Red X/green Y lie in the plane; blue Z is the face normal.'],
+            [/^그룹 해제 완료 · (.+)은 기존 연결을 유지하고, 나머지 (\d+)개 부품은 미연결 카드로 분리했습니다\.$/, 'Ungrouped · $1 kept existing connections; the other $2 parts became unconnected cards.'],
+            [/^(.+) 분리 완료 · 이 부품을 기준으로 찍은 조인트 (\d+)개는 중심·축을 다시 확인하세요\.$/, 'Separated $1 · Recheck the center and axis of $2 joints picked from this part.'],
+            [/^(.+) 부품을 (.+)에서 빼내 미연결 카드로 만들었습니다\.$/, 'Removed part $1 from $2 and created an unconnected card.'],
+            [/^'(.+)' 부품을 '(.+)' 링크에서 빼낼까요\?$/, "Remove part '$1' from link '$2'?"],
+            [/^URDF 생성 전 (.+)$/, 'Before generating URDF: $1'],
+            [/^아직 묶음 후보 (\d+)개가 남아 있습니다\.$/, '$1 grouping candidates remain.'],
+            [/^내보내기 폴더를 찾을 수 없습니다: (.+)$/, 'Export folder not found: $1'],
+            [/^WSL로 전달할 수 없는 Windows 경로입니다: (.+)$/, 'This Windows path cannot be passed to WSL: $1'],
+            [/^ROS 2 패키지 이름이 올바르지 않습니다: (.+)$/, 'Invalid ROS 2 package name: $1'],
+            [/^올바르지 않은 ROS 2 패키지 이름입니다: (.+)$/, 'Invalid ROS 2 package name: $1'],
+            [/^원본 조립품 파일을 찾을 수 없습니다: (.+)$/, 'Original assembly file not found: $1'],
+            [/^저장된 프리뷰 편집 파일을 읽지 못했습니다: (.+)$/, 'Could not read the saved preview editing file: $1'],
+            [/^(.+) 작업 파일을 찾을 수 없습니다\.$/, 'Work file not found: $1.'],
+            [/^프리뷰 작업 저장 실패: (.+)$/, 'Failed to save preview work: $1'],
+            [/^프리뷰 작업 불러오기 실패: (.+)$/, 'Failed to load preview work: $1'],
+            [/^가져오기 실패: (.+)$/, 'Import failed: $1'],
+            [/^현재 Inventor 가져오기 실패: (.+)$/, 'Failed to import the current Inventor assembly: $1'],
+            [/^원본 IAM 가져오기 실패: (.+)$/, 'Failed to import the original IAM: $1'],
+            [/^URDF 생성 실패: (.+)$/, 'URDF generation failed: $1'],
+            [/^MoveIt 계획\/실행 실패: (.+)$/, 'MoveIt planning/execution failed: $1'],
+            [/^상태 확인 실패: (.+)$/, 'Status check failed: $1'],
+            [/^MoveIt 상태 확인 실패: (.+)$/, 'MoveIt status check failed: $1']
+        ];
+
+        const PETASOS_ENGLISH_SENTENCES = [
+            ['미연결 링크 ·', 'Unconnected link ·'], ['링크 ·', 'Link ·'], ['조인트 ·', 'Joint ·'],
+            ['와(과) 연결됨 (', 'connected to ('],
+            ['정확 스냅', 'precise snap'], ['겹친 후보', 'overlapping candidates'], ['다음 후보', 'next candidate'],
+            ['원/호 중심 자석', 'circle/arc center snap'], ['긴 모서리 방향 감지', 'long-edge direction detected'],
+            ['원형/대칭면은 부모 링크 X방향 사용', 'using the parent-link X direction for circular/symmetric faces'],
+            ['사용자 지정 면', 'custom face'], ['긴 모서리 → 월드', 'long edge → world'], ['평면 내 회전 유지', 'keep in-plane rotation'],
+            ['부모 링크 전체', 'entire parent link'], ['자식 링크 전체', 'entire child link'], ['개 부품', ' parts'],
+            ['이 부품만 화면과 클릭 판정에 남김:', 'Only this part remains visible and pickable:'], ['이 부품만 판정:', 'pick only this part:'],
+            ['부품에서 판정', 'parts available for picking'], ['겹친 자석', 'overlapping snaps'],
+            ['부품만 남겼습니다.', 'part remains.'], ['자식 링크 밖의 부품을 완전히 제외했습니다.', 'Completely excluded parts outside the child link.'],
+            ['정밀 CAD 자석', 'precise CAD snaps'], ['원·호를 고르세요.', 'Choose the desired circle or arc.'],
+            ['이 프로젝트에는 정밀 CAD 자석이 없으므로 IAM을 다시 가져와야 원·호 중심이 정확해집니다.', 'This project has no precise CAD snaps; reimport the IAM for accurate circle/arc centers.'],
+            ['1/2 부모 연결점:', '1/2 parent connection:'], ['부모 링크의 원·호 중심 또는 평면 중심을 선택하세요.', 'Select a circle/arc center or face center on the parent link.'],
+            ['부모 연결점 저장 완료:', 'Parent connection saved:'], ['이제 2/2 자식 연결점을 선택하세요.', 'Now select the 2/2 child connection point.'],
+            ['부품 선택 · 우클릭하여 한 링크로 그룹화', 'parts selected · right-click to group into one link'],
+            ['그룹화 선택', 'Grouping selection'], ['병합 후 남을 링크:', 'surviving link:'],
+            ['미연결 카드로 분리했습니다.', 'separated into unconnected cards.'], ['이 연결은 IAM 배치 보존용 묶음 후보입니다.', 'This connection is a grouping candidate that preserves the IAM layout.'],
+            ['같은 링크의 부품이면 카드를 겹쳐 합치고, 서로 움직이는 링크 사이면 아래 버튼으로 실제 조인트로 전환하세요.', 'If the parts belong to one link, overlap the cards to merge them; if the links move relative to each other, convert this to an actual joint below.'],
+            ['WORLD 루트 미지정 ·', 'WORLD root not set ·'], ['미연결 링크', 'unconnected links'], ['중복 조인트 이름', 'duplicate joint names'],
+            ['리밋 미완료', 'incomplete limits'], ['lower ≥ upper 오류', 'lower ≥ upper errors'],
+            ['WORLD를 사용할 루트 링크에 연결하세요', 'connect the root link to WORLD'], ['개를 배선하거나 병합하세요', 'must be connected or merged'],
+            ['개를 수정하세요', 'must be corrected'], ['회전 리밋 미완료', 'incomplete rotation limits'], ['개의 최소·최대값을 모두 지정하세요', 'need both minimum and maximum values'],
+            ['리밋 오류', 'limit errors'], ['개에서 lower를 upper보다 작게 설정하세요', 'must set lower below upper'],
+            ['같은 링크의 부품은 카드를 겹쳐 병합하고, 링크 사이 연결은 묶음 후보를 클릭해 실제 조인트로 전환하세요.', 'Merge parts of the same link by overlapping their cards; for a connection between links, click the grouping candidate and convert it to an actual joint.'],
+            ['저장 중...', 'Saving...'], ['저장 완료', 'Saved'], ['저장 실패', 'Save failed'],
+            ['작업 저장에 실패했습니다.', 'Failed to save work.'], ['저장 작업 목록을 읽지 못했습니다.', 'Could not read the saved-work list.'],
+            ['저장된 작업이 없습니다.', 'No saved work.'], ['저장 작업을 불러오지 못했습니다.', 'Could not load saved work.'],
+            ['저장 목록을 읽지 못했습니다.', 'Could not read the saved-work list.'], ['아직 이름을 붙여 저장한 작업이 없습니다.', 'No named saved work yet.'],
+            ['저장 목록 불러오기 실패', 'Failed to load saved-work list'], ['저장 작업 이름을 입력하세요.', 'Enter a saved-work name.'],
+            ['먼저 새 저장 작업 이름을 만들어주세요.', 'Create a new saved-work name first.'], ['불러올 저장 작업을 목록에서 선택하세요.', 'Select work to load from the list.'],
+            ['이전 작업 목록을 읽지 못했습니다.', 'Could not read the previous-work list.'], ['이전 작업 목록 불러오기 실패', 'Failed to load previous-work list'],
+            ['불러올 이전 작업을 선택하세요.', 'Select previous work to load.'], ['이전 작업을 불러오지 못했습니다.', 'Could not load previous work.'],
+            ['프로젝트 이름을 입력하세요.', 'Enter a project name.'], ['현재 Inventor 조립품과 참조 부품을 읽고 있습니다...', 'Reading the current Inventor assembly and referenced parts...'],
+            ['Windows 파일 선택창에서 원본 IAM을 선택하세요...', 'Select the original IAM in the Windows file dialog...'], ['Inventor 가져오기에 실패했습니다.', 'Failed to import from Inventor.'],
+            ['원본 IAM 선택을 취소했습니다.', 'Original IAM selection canceled.'], ['프로젝트 이름과 조립품 파일 또는 프로젝트 폴더가 필요합니다.', 'A project name and assembly file or project folder are required.'],
+            ['IAM은 형상을 내장하지 않습니다. 아래 폴더 선택에서 IAM과 참조 IPT가 함께 있는 프로젝트 폴더 전체를 선택하세요.', 'IAM does not embed geometry. Select the entire project folder containing the IAM and referenced IPT files below.'],
+            ['형상과 조립 정보를 분석하고 있습니다...', 'Analyzing geometry and assembly information...'], ['가져오기에 실패했습니다.', 'Import failed.'],
+            ['비정상적으로 멀리 저장된 원점을 해제했습니다. 바닥면을 다시 지정하세요.', 'Cleared an abnormally distant saved origin. Set the ground plane again.'],
+            ['CAD 원 중심', 'CAD circle center'], ['CAD 호 중심', 'CAD arc center'], ['CAD 원통 중심축', 'CAD cylinder axis'], ['CAD 면 중심', 'CAD face center'],
+            ['CAD 모서리 중점', 'CAD edge midpoint'], ['CAD 꼭짓점', 'CAD vertex'], ['원/호 중심', 'Circle/arc center'], ['면 중심', 'Face center'],
+            ['평평한 면 위로 마우스를 옮겨 노란 중심점이 나타나면 클릭하세요.', 'Move over a flat face and click when the yellow center point appears.'],
+            ['바닥면 지정을 취소했습니다.', 'Ground-plane selection canceled.'], ['CAD 종류에 맞는 자동 위쪽 축으로 복원했습니다.', 'Restored the automatic up axis for this CAD type.'],
+            ['위쪽 축을 적용했습니다. 필요하면 바닥면을 직접 지정할 수 있습니다.', 'Applied the up axis. You can set the ground plane manually if needed.'],
+            ['조립품을 불러오면 3D 형상이 표시됩니다.', 'Import an assembly to display its 3D geometry.'],
+            ['최소·최대 각도에는 숫자를 입력하세요.', 'Enter numbers for minimum and maximum angles.'], ['최소각은 설정된 최대각보다 작아야 합니다.', 'The minimum angle must be less than the maximum angle.'],
+            ['최대각은 설정된 최소각보다 커야 합니다.', 'The maximum angle must be greater than the minimum angle.'],
+            ['조립품을 처음 불러온 원래 자세로 복원했습니다.', 'Restored the original pose from when the assembly was imported.'], ['전체 링크 보기로 복원했습니다.', 'Restored the view of all links.'],
+            ['면을 찾지 못했습니다. 모델의 평평한 면을 다시 클릭하세요.', 'No face found. Click a flat face on the model again.'], ['이 면의 방향을 계산하지 못했습니다. 다른 평평한 면을 선택하세요.', 'Could not calculate this face orientation. Select another flat face.'],
+            ['평면 내 회전 유지', 'Keep in-plane rotation'], ['이 프로젝트는 IAM을 다시 가져와야 원·호 중심을 정밀하게 잡을 수 있습니다.', 'Reimport the IAM to locate circle and arc centers precisely in this project.'],
+            ['조인트 위치 지정을 취소했습니다.', 'Joint placement canceled.'], ['선택한 조인트의 부모 링크를 찾지 못했습니다.', 'Could not find the parent link of the selected joint.'],
+            ['CAD 스냅 또는 평면 중심을 찾지 못했습니다. 원·호 테두리나 평평한 면을 다시 클릭하세요.', 'Could not find a CAD snap or face center. Click a circle/arc edge or flat face again.'],
+            ['선택 영역이 완전히 평평하지 않습니다. 베벨이나 곡면이 아닌 평면을 클릭하세요.', 'The selected area is not completely flat. Click a plane rather than a bevel or curved surface.'],
+            ['이 면에서 직교 좌표계를 만들지 못했습니다. 더 넓고 평평한 면을 선택하세요.', 'Could not create an orthogonal frame from this face. Select a wider, flatter face.'],
+            ['남길 링크와 합칠 링크들을 차례로 선택한 뒤 병합 버튼을 누르세요.', 'Select the link to keep and the links to merge, then click Merge.'],
+            ['그룹 해제할 링크 카드를 먼저 선택하세요.', 'Select a link card to ungroup first.'], ['두 개 이상의 부품이 들어 있는 링크만 그룹 해제할 수 있습니다.', 'Only links containing two or more parts can be ungrouped.'],
+            ['링크에는 최소 한 개의 부품이 남아 있어야 합니다.', 'At least one part must remain in a link.'], ['WORLD에 연결할 루트 링크의 입력 포트를 클릭하세요.', 'Click the input port of the root link to connect to WORLD.'],
+            ['연결할 자식 링크의 왼쪽 입력 포트를 클릭하세요.', 'Click the left input port of the child link to connect.'], ['이 연결은 순환 구조를 만들기 때문에 사용할 수 없습니다.', 'This connection would create a cycle and cannot be used.'],
+            ['끊을 조인트 선을 먼저 클릭하세요.', 'Click the joint connection to disconnect first.'], ['부모 링크의 출력 포트를 먼저 누른 뒤 이 입력 포트를 누르세요.', 'Click the parent link output port, then this input port.'],
+            ['이 링크에서 자식 링크로 조인트 연결을 시작합니다.', 'Start a joint connection from this link to a child link.'],
+            ['최신 ROS 2 패키지를 Ubuntu 22.04로 보내고 있습니다.', 'Sending the latest ROS 2 package to Ubuntu 22.04.'], ['WSL RViz를 시작하지 못했습니다.', 'Could not start WSL RViz.'],
+            ['WSL 빌드를 시작했습니다.', 'Started the WSL build.'], ['RViz와 ROS 2 표시 노드를 종료하고 있습니다.', 'Stopping RViz and ROS 2 display nodes.'],
+            ['RViz를 종료하지 못했습니다.', 'Could not stop RViz.'], ['RViz가 종료되었습니다.', 'RViz stopped.'],
+            ['페타소스 MoveIt 시작 설정을 검사하고 Setup Assistant를 열고 있습니다.', 'Checking the Petasos MoveIt startup configuration and opening Setup Assistant.'],
+            ['MoveIt Setup Assistant를 열지 못했습니다.', 'Could not open MoveIt Setup Assistant.'], ['MoveIt Assistant 준비 중', 'Preparing MoveIt Assistant'],
+            ['Assistant 저장 결과를 백업·정규화한 뒤 MoveIt 데모를 빌드하고 있습니다.', 'Backing up and normalizing the Assistant output, then building the MoveIt demo.'],
+            ['MoveIt 데모를 실행하지 못했습니다.', 'Could not run the MoveIt demo.'], ['MoveIt 데모 준비 중', 'Preparing MoveIt demo'],
+            ['현재 관절 상태에서 안전한 작은 목표를 만들어 계획·실행하고 있습니다.', 'Planning and executing a small safe target from the current joint state.'],
+            ['MoveIt 움직임 검사에 실패했습니다.', 'MoveIt motion validation failed.'], ['MoveIt 움직임 검사 성공', 'MoveIt motion validation succeeded'],
+            ['MoveIt 작업을 종료하고 있습니다.', 'Stopping MoveIt tasks.'], ['MoveIt 작업을 종료하지 못했습니다.', 'Could not stop MoveIt tasks.'], ['MoveIt 작업을 종료했습니다.', 'MoveIt tasks stopped.'],
+            ['URDF 생성에 실패했습니다.', 'URDF generation failed.'], ['선택한 경로', 'Selected path'],
+            ['description과 moveit_config가 start_petasos.cmd 옆 export/ros_ws/src에 생성되었습니다. Assistant가 이 작업공간을 직접 수정합니다.', 'The description and moveit_config packages were created in export/ros_ws/src beside start_petasos.cmd. Assistant edits this workspace directly.'],
+            ['MoveIt 없이 사용할 수 있는 ROS 2 기본 description 패키지가 생성되었습니다.', 'A basic ROS 2 description package that works without MoveIt was created.'],
+            ['이 브라우저 창을 닫고 Fusion 360으로 돌아가시면 생성이 진행됩니다.', 'Close this browser window and return to Fusion 360 to continue generation.'],
+            ['RViz 실행 대기 중', 'Waiting to launch RViz'], ['RViz 실행 스크립트를 Ubuntu에 준비하지 못했습니다.', 'Could not prepare the RViz launch script in Ubuntu.'],
+            ['RViz가 Windows 화면에서 실행 중입니다.', 'RViz is running on the Windows desktop.'], ['RViz 실행이 종료되었습니다.', 'RViz has stopped.'],
+            ['RViz 실행 중 오류가 발생했습니다.', 'An error occurred while running RViz.'], ['동기화 또는 빌드 중 오류가 발생했습니다.', 'An error occurred during synchronization or build.'],
+            ['내보낸 ROS 2 package.xml을 찾을 수 없습니다.', 'The exported ROS 2 package.xml was not found.'], ['이미 RViz가 실행 중입니다.', 'RViz is already running.'],
+            ['WSL로 패키지를 복사하고 ROS 2 빌드를 준비하고 있습니다.', 'Copying the package to WSL and preparing the ROS 2 build.'], ['실행 중인 RViz가 없습니다.', 'RViz is not running.'],
+            ['원본 IAM 파일 선택은 Windows에서 지원됩니다.', 'Selecting an original IAM file is supported on Windows.'], ['Windows 파일 선택창을 사용할 수 없습니다.', 'The Windows file dialog is unavailable.'],
+            ['먼저 조립품을 불러와야 합니다.', 'Import an assembly first.'], ['저장할 프리뷰 편집 데이터가 올바르지 않습니다.', 'The preview editing data to save is invalid.'],
+            ['불러올 프로젝트 경로가 올바르지 않습니다.', 'The project path to load is invalid.'], ['불러올 프로젝트를 찾을 수 없습니다.', 'The project to load was not found.'],
+            ['다시 불러올 프로젝트가 없습니다.', 'There is no project to reload.'], ['불러올 저장 작업 이름이 올바르지 않습니다.', 'The saved-work name to load is invalid.'],
+            ['마지막 자동 저장', 'Last autosave'], ['저장된 프리뷰 편집 데이터가 올바르지 않습니다.', 'The saved preview editing data is invalid.'],
+            ['지원되는 파일이 선택되지 않았습니다.', 'No supported file was selected.'], ['ZIP 내보내기는 사용하지 않습니다. export/ros_ws 폴더를 직접 사용하세요.', 'ZIP export is not used. Use the export/ros_ws folder directly.'],
+            ['먼저 ROS 2 패키지를 생성해 주세요.', 'Generate the ROS 2 package first.'], ['내보낸 description 패키지를 찾지 못했습니다.', 'The exported description package was not found.'],
+            ['기본 ROS 2 패키지로 익스포트했습니다. MoveIt 단일 ros_ws를 선택해 다시 생성하세요.', 'The basic ROS 2 package was exported. Select the MoveIt unified ros_ws option and generate again.'],
+            ['기본 ROS 2 패키지에는 MoveIt 설정이 없습니다.', 'The basic ROS 2 package does not include MoveIt configuration.'], ['RViz와 MoveIt 세션을 정리했습니다.', 'RViz and MoveIt sessions were cleaned up.'],
+            ['MoveIt 테스트 대기 중', 'Waiting for MoveIt test'], ['Ubuntu 22.04에 MoveIt 또는 MoveIt Setup Assistant가 없습니다.', 'MoveIt or MoveIt Setup Assistant is not installed in Ubuntu 22.04.'],
+            ['이미 MoveIt 작업이 실행 중입니다.', 'A MoveIt task is already running.'], ['MoveIt Assistant에 전달할 로봇 xacro 파일을 찾지 못했습니다.', 'The robot xacro file for MoveIt Assistant was not found.'],
+            ['내보낸 ROS 2 패키지에서 package.xml을 찾지 못했습니다.', 'package.xml was not found in the exported ROS 2 package.'],
+            ['MoveIt 설정 패키지를 찾지 못했습니다.', 'The MoveIt configuration package was not found.'], ['경로로 생성한 뒤 다시 실행하세요.', 'Create it at this path, then run again.'],
+            ['Assistant 저장 결과에서 실행 전 문제가 발견됐습니다:', 'Pre-run issues were found in the Assistant output:'], ['상세 로그를 확인하세요.', 'Check the detailed log.'],
+            ['MoveIt Assistant 메타데이터가 불완전합니다.', 'MoveIt Assistant metadata is incomplete.'], ['MoveIt 단일 ros_ws를 다시 내보낸 뒤 실행하세요.', 'Export the MoveIt unified ros_ws again, then run.'],
+            ['페타소스 MoveIt 시작 설정을 열었습니다. 그룹·충돌·포즈를 편집하고 저장한 뒤 창을 닫으세요.', 'Petasos MoveIt startup settings are open. Edit and save groups, collisions, and poses, then close the window.'],
+            ['MoveIt demo.launch.py가 실행 중입니다.', 'MoveIt demo.launch.py is running.'], ['Assistant 저장 결과 검사 및 ros_ws 익스포트 완료', 'Assistant output validation and ros_ws export complete'],
+            ['이제 ‘생성 결과 실행’을 누르세요.', 'Now click “Run generated result”.'], ['Assistant를 닫았습니다. ros_ws 저장 결과를 확인하세요.', 'Assistant closed. Check the saved ros_ws output.'],
+            ['MoveIt 데모가 종료되었습니다.', 'The MoveIt demo has stopped.'], ['MoveIt 실행 중 오류가 발생했습니다.', 'An error occurred while running MoveIt.'],
+            ['WSL 복사·빌드 중 오류가 발생했습니다.', 'An error occurred during WSL copy/build.'], ['같은 ros_ws 폴더에서 MoveIt 설정 패키지를 찾지 못했습니다.', 'The MoveIt configuration package was not found in the same ros_ws folder.'],
+            ['MoveIt 단일 ros_ws를 다시 익스포트하세요.', 'Export the MoveIt unified ros_ws again.'], ['내보낸 ros_ws의 Xacro와 MoveIt 설정을 직접 검사한 뒤', 'Inspecting Xacro and MoveIt settings in the exported ros_ws, then'],
+            ['MoveIt Setup Assistant를 준비하고 있습니다.', 'preparing MoveIt Setup Assistant.'], ['설정 위치:', 'Configuration location:'],
+            ['Assistant 결과를 백업·정규화한 뒤', 'Backing up and normalizing Assistant output, then'], ['ROS 2 작업공간을 빌드하고 있습니다.', 'building the ROS 2 workspace.'],
+            ['먼저 MoveIt 생성 결과를 실행해 demo를 켜 주세요.', 'Run the generated MoveIt result and start the demo first.'], ['MoveIt 자동검사에 필요한 패키지 정보를 찾지 못했습니다.', 'Package information required for MoveIt automatic validation was not found.'],
+            ['MoveIt 자동 움직임 검사에 실패했습니다.', 'MoveIt automatic motion validation failed.'], ['움직임 검사 성공:', 'Motion validation succeeded:'],
+            ['OMPL 계획과 가상 컨트롤러 실행 후', 'after OMPL planning and virtual controller execution,'], ['최대 관절 오차', 'maximum joint error'],
+            ['실행 중인 MoveIt 작업이 없습니다.', 'No MoveIt task is running.']
+        ];
+
+        function petasosTranslateText(value) {
+            const source = String(value ?? '');
+            if (petasosLanguage !== 'en' || !/[가-힣]/.test(source)) return source;
+            const leading = source.match(/^\s*/)[0];
+            const trailing = source.match(/\s*$/)[0];
+            const compact = source.trim().replace(/\s+/g, ' ');
+            if (PETASOS_ENGLISH[compact]) return leading + PETASOS_ENGLISH[compact] + trailing;
+            let translated = compact;
+            for (const [pattern, replacement] of PETASOS_ENGLISH_PATTERNS) {
+                if (pattern.test(translated)) {
+                    translated = translated.replace(pattern, replacement);
+                    break;
+                }
+            }
+            for (const [ko, en] of PETASOS_ENGLISH_SENTENCES) translated = translated.split(ko).join(en);
+            return leading + translated + trailing;
+        }
+
+        function petasosTranslateNode(root) {
+            if (!root || (root.nodeType === Node.ELEMENT_NODE && root.closest('[data-no-i18n]'))) return;
+            if (root.nodeType === Node.TEXT_NODE) {
+                const value = root.nodeValue || '';
+                if (/[가-힣]/.test(value)) petasosTextOriginals.set(root, value);
+                if (petasosLanguage === 'en') root.nodeValue = petasosTranslateText(value);
+                return;
+            }
+            if (root.nodeType !== Node.ELEMENT_NODE && root.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) return;
+            if (root.nodeType === Node.ELEMENT_NODE) {
+                let originals = petasosAttributeOriginals.get(root);
+                for (const name of PETASOS_TRANSLATED_ATTRIBUTES) {
+                    if (!root.hasAttribute(name)) continue;
+                    const value = root.getAttribute(name) || '';
+                    if (/[가-힣]/.test(value)) {
+                        if (!originals) originals = new Map();
+                        originals.set(name, value);
+                        petasosAttributeOriginals.set(root, originals);
+                    }
+                    if (petasosLanguage === 'en') root.setAttribute(name, petasosTranslateText(value));
+                }
+            }
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+            let node;
+            while ((node = walker.nextNode())) {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    if (node.hasAttribute('data-no-i18n')) {
+                        walker.currentNode = node;
+                        continue;
+                    }
+                    let originals = petasosAttributeOriginals.get(node);
+                    for (const name of PETASOS_TRANSLATED_ATTRIBUTES) {
+                        if (!node.hasAttribute(name)) continue;
+                        const value = node.getAttribute(name) || '';
+                        if (/[가-힣]/.test(value)) {
+                            if (!originals) originals = new Map();
+                            originals.set(name, value);
+                            petasosAttributeOriginals.set(node, originals);
+                        }
+                        if (petasosLanguage === 'en') node.setAttribute(name, petasosTranslateText(value));
+                    }
+                } else if (!node.parentElement?.closest('[data-no-i18n]')) {
+                    const value = node.nodeValue || '';
+                    if (/[가-힣]/.test(value)) petasosTextOriginals.set(node, value);
+                    if (petasosLanguage === 'en') node.nodeValue = petasosTranslateText(value);
+                }
+            }
+        }
+
+        function petasosRestoreKorean(root = document.body) {
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+            const nodes = [root];
+            let node;
+            while ((node = walker.nextNode())) nodes.push(node);
+            for (const current of nodes) {
+                if (current.nodeType === Node.TEXT_NODE) {
+                    const original = petasosTextOriginals.get(current);
+                    if (original !== undefined) current.nodeValue = original;
+                } else if (current.nodeType === Node.ELEMENT_NODE) {
+                    const originals = petasosAttributeOriginals.get(current);
+                    if (originals) for (const [name, value] of originals) current.setAttribute(name, value);
+                }
+            }
+        }
+
+        function petasosUpdateLanguageButtons() {
+            const english = document.getElementById('language-en');
+            const korean = document.getElementById('language-ko');
+            if (!english || !korean) return;
+            english.classList.toggle('active', petasosLanguage === 'en');
+            korean.classList.toggle('active', petasosLanguage === 'ko');
+            english.setAttribute('aria-pressed', String(petasosLanguage === 'en'));
+            korean.setAttribute('aria-pressed', String(petasosLanguage === 'ko'));
+        }
+
+        function setPetasosLanguage(language, persist = true) {
+            petasosLanguage = language === 'en' ? 'en' : 'ko';
+            document.documentElement.lang = petasosLanguage;
+            petasosApplyingLanguage = true;
+            if (petasosLanguage === 'en') {
+                petasosTranslateNode(document.body);
+                document.title = 'Petasos A3 · URDF Structure Editor';
+            } else {
+                petasosRestoreKorean();
+                document.title = '페타소스 A3 · URDF 구조 에디터';
+            }
+            petasosUpdateLanguageButtons();
+            if (persist) {
+                try { localStorage.setItem(PETASOS_LANGUAGE_KEY, petasosLanguage); } catch (_) {}
+            }
+            queueMicrotask(() => { petasosApplyingLanguage = false; });
+            document.dispatchEvent(new CustomEvent('petasoslanguagechange', { detail: { language: petasosLanguage } }));
+        }
+
+        function petasosI18nAudit() {
+            const issues = [];
+            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+            let node;
+            while ((node = walker.nextNode())) {
+                if (node.nodeType === Node.TEXT_NODE && node.parentElement?.closest('[data-no-i18n]')) continue;
+                if (node.nodeType === Node.TEXT_NODE && /[가-힣]/.test(node.nodeValue || '')) issues.push(node.nodeValue.trim());
+                if (node.nodeType === Node.ELEMENT_NODE && !node.closest('[data-no-i18n]')) {
+                    for (const name of PETASOS_TRANSLATED_ATTRIBUTES) {
+                        const value = node.getAttribute(name) || '';
+                        if (/[가-힣]/.test(value)) issues.push(`${name}: ${value}`);
+                    }
+                }
+            }
+            return [...new Set(issues.filter(Boolean))];
+        }
+        window.petasosI18nAudit = petasosI18nAudit;
+
+        const petasosLanguageObserver = new MutationObserver(mutations => {
+            if (petasosApplyingLanguage) return;
+            petasosApplyingLanguage = true;
+            for (const mutation of mutations) {
+                if (mutation.type === 'characterData') petasosTranslateNode(mutation.target);
+                else if (mutation.type === 'attributes') petasosTranslateNode(mutation.target);
+                else for (const added of mutation.addedNodes) petasosTranslateNode(added);
+            }
+            queueMicrotask(() => { petasosApplyingLanguage = false; });
+        });
+
+        const petasosNativeAlert = window.alert.bind(window);
+        const petasosNativeConfirm = window.confirm.bind(window);
+        window.alert = message => petasosNativeAlert(petasosTranslateText(message));
+        window.confirm = message => petasosNativeConfirm(petasosTranslateText(message));
+
+        document.addEventListener('DOMContentLoaded', () => {
+            try { petasosLanguage = localStorage.getItem(PETASOS_LANGUAGE_KEY) === 'en' ? 'en' : 'ko'; } catch (_) {}
+            petasosTranslateNode(document.body);
+            setPetasosLanguage(petasosLanguage, false);
+            petasosLanguageObserver.observe(document.body, {
+                subtree: true, childList: true, characterData: true, attributes: true,
+                attributeFilter: PETASOS_TRANSLATED_ATTRIBUTES
+            });
+        });
+
         let treeData = null;
         let selectedElement = null;
+        let selectedPhysicalMaterialKey = null;
+        let physicalMaterialLibraryExpanded = false;
+        let patcherMaterialShelfExpanded = false;
+        let patcherMaterialShelfQuery = '';
+        let patcherMaterialCreateOpen = false;
+        let panelSelectionIdentity = null;
+        let activePhysicalMaterialComponent = null;
+        let activePhysicalMaterialKey = '';
         let structureNamingPlan = null;
         let structureNamingContinueExport = false;
         const TREE_EDITOR_MODE = false;
 
         // --- 3D 프리뷰 관련 변수 ---
         let scene, camera, renderer, controls, robotRoot;
-        let worldFrameHelper, gridHelper;
+        let worldFrameHelper, gridHelper, baseFootprintFrameMarker;
         let meshDict = {}; // { 'comp_name': THREE.Mesh }
         let meshComponentByObject = new WeakMap();
         let meshEdgeDict = {};
@@ -1437,6 +2541,9 @@ HTML_CONTENT = """
         let visualMeshesEnabled = true;
         let collisionMeshesEnabled = false;
         let groundFacePickMode = false;
+        let baseFootprintPickMode = false;
+        let baseFootprintPanelExpanded = false;
+        let baseFootprintFrameSelected = false;
         let jointOriginPickMode = false;
         let jointOriginPickJoint = null;
         let jointOriginPickStage = 'parent';
@@ -1448,6 +2555,7 @@ HTML_CONTENT = """
         let jointSnapControlsSignature = '';
         let activeJointSnapMarkerInfo = null;
         let groundSnapMarker = null;
+        let jointSnapMarker = null;
         let groundSnapHoverFrame = null;
         let groundSnapHoverEvent = null;
         let groundSnapLastHoverAt = 0;
@@ -1486,6 +2594,214 @@ HTML_CONTENT = """
         });
         const highlightMaterial = new THREE.MeshBasicMaterial({ color: 0x00aaff, wireframe: false, side: THREE.DoubleSide });
         const ghostMaterial = new THREE.MeshBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.1, wireframe: true });
+
+        function isLinkDisabled(targetNode) {
+            if (!targetNode) return false;
+            if (!treeData || targetNode === treeData) return false;
+            if (targetNode.disabled) return true;
+
+            function checkPath(current, ancestorDisabled) {
+                if (!current) return null;
+                const currentDisabled = ancestorDisabled || !!current.disabled;
+                if (current === targetNode) {
+                    return currentDisabled;
+                }
+                if (!Array.isArray(current.children)) return null;
+                for (const child of current.children) {
+                    const branchDisabled = currentDisabled || !!child.disabled;
+                    if (child.link_group === targetNode) {
+                        return branchDisabled || !!child.link_group?.disabled;
+                    }
+                    if (child.link_group) {
+                        const found = checkPath(child.link_group, branchDisabled);
+                        if (found !== null) return found;
+                    }
+                }
+                return null;
+            }
+
+            const result = checkPath(treeData, !!treeData.disabled);
+            return result === true;
+        }
+
+        function isJointDisabled(jointObj) {
+            if (!jointObj) return false;
+            if (jointObj.disabled) return true;
+            if (jointObj.link_group && isLinkDisabled(jointObj.link_group)) return true;
+            if (!treeData) return false;
+
+            function checkJointAncestors(current, ancestorDisabled) {
+                if (!current) return null;
+                const currentDisabled = ancestorDisabled || !!current.disabled;
+                if (!Array.isArray(current.children)) return null;
+                for (const child of current.children) {
+                    if (child === jointObj) {
+                        return currentDisabled || !!child.disabled;
+                    }
+                    if (child.link_group) {
+                        const found = checkJointAncestors(child.link_group, currentDisabled || !!child.disabled);
+                        if (found !== null) return found;
+                    }
+                }
+                return null;
+            }
+
+            const result = checkJointAncestors(treeData, !!treeData.disabled);
+            return result === true;
+        }
+
+        function setSubtreeActive(node, willDisable) {
+            if (!node) return;
+            node.disabled = willDisable;
+            if (Array.isArray(node.children)) {
+                for (const child of node.children) {
+                    child.disabled = willDisable;
+                    if (child.link_group) {
+                        setSubtreeActive(child.link_group, willDisable);
+                    }
+                }
+            }
+        }
+
+        function syncIncomingJoint(parent, targetNode, willDisable) {
+            if (!parent || !Array.isArray(parent.children)) return false;
+            for (const child of parent.children) {
+                if (child.link_group === targetNode) {
+                    child.disabled = willDisable;
+                    return true;
+                }
+                if (child.link_group && syncIncomingJoint(child.link_group, targetNode, willDisable)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function enableAncestors(root, targetNode) {
+            function findAndEnable(current) {
+                if (!current || !Array.isArray(current.children)) return false;
+                for (const child of current.children) {
+                    if (child.link_group === targetNode) {
+                        child.disabled = false;
+                        current.disabled = false;
+                        return true;
+                    }
+                    if (child.link_group && findAndEnable(child.link_group)) {
+                        child.disabled = false;
+                        current.disabled = false;
+                        return true;
+                    }
+                }
+                return false;
+            }
+            findAndEnable(root);
+        }
+
+        function enableJointAncestors(root, targetJoint) {
+            function findAndEnable(current) {
+                if (!current || !Array.isArray(current.children)) return false;
+                for (const child of current.children) {
+                    if (child === targetJoint) {
+                        current.disabled = false;
+                        return true;
+                    }
+                    if (child.link_group && findAndEnable(child.link_group)) {
+                        child.disabled = false;
+                        current.disabled = false;
+                        return true;
+                    }
+                }
+                return false;
+            }
+            findAndEnable(root);
+        }
+
+        function getDisabledComponents() {
+            const disabledComponents = new Set();
+            if (!treeData) return disabledComponents;
+            function collect(node, ancestorDisabled) {
+                if (!node) return;
+                const nodeDisabled = ancestorDisabled || !!node.disabled;
+                if (nodeDisabled && Array.isArray(node.components)) {
+                    node.components.forEach(comp => disabledComponents.add(comp));
+                }
+                (node.children || []).forEach(child => {
+                    const childDisabled = nodeDisabled || !!child.disabled;
+                    collect(child.link_group, childDisabled);
+                });
+            }
+            collect(treeData, !!treeData.disabled);
+            return disabledComponents;
+        }
+
+        function toggleLinkActive(targetNode) {
+            if (!targetNode || targetNode === treeData) return;
+            saveState();
+            const willDisable = !isLinkDisabled(targetNode);
+            setSubtreeActive(targetNode, willDisable);
+            syncIncomingJoint(treeData, targetNode, willDisable);
+            if (!willDisable) {
+                enableAncestors(treeData, targetNode);
+            }
+
+            if (willDisable) {
+                if (viewerIsolatedNode && isLinkDisabled(viewerIsolatedNode)) {
+                    viewerIsolatedNode = null;
+                }
+                const disabledComps = getDisabledComponents();
+                if (viewerIsolatedComponent && disabledComps.has(viewerIsolatedComponent)) {
+                    viewerIsolatedComponent = null;
+                }
+            }
+            previewRigDirty = true;
+            applyViewerIsolationVisibility();
+            render();
+            if (selectedElement) {
+                updatePanel();
+            }
+        }
+
+        function toggleJointActive(targetJoint) {
+            if (!targetJoint) return;
+            saveState();
+            const willDisable = !isJointDisabled(targetJoint);
+            targetJoint.disabled = willDisable;
+            if (targetJoint.link_group) {
+                setSubtreeActive(targetJoint.link_group, willDisable);
+            }
+            if (!willDisable) {
+                enableJointAncestors(treeData, targetJoint);
+            }
+            if (willDisable) {
+                if (viewerIsolatedNode && isLinkDisabled(viewerIsolatedNode)) {
+                    viewerIsolatedNode = null;
+                }
+                const disabledComps = getDisabledComponents();
+                if (viewerIsolatedComponent && disabledComps.has(viewerIsolatedComponent)) {
+                    viewerIsolatedComponent = null;
+                }
+            }
+            previewRigDirty = true;
+            applyViewerIsolationVisibility();
+            render();
+            if (selectedElement) {
+                updatePanel();
+            }
+        }
+
+        function updateToggleActiveButtonUi(button, disabled, itemName = '') {
+            if (!button) return;
+            button.innerHTML = '<span class="toggle-knob"></span>';
+            if (disabled) {
+                button.classList.add('is-disabled');
+                button.title = '비활성화 상태 (클릭하여 활성화 및 3D 모델 표시)';
+                button.setAttribute('aria-label', `${itemName ? itemName + ' ' : ''}활성화`);
+            } else {
+                button.classList.remove('is-disabled');
+                button.title = '활성화 상태 (클릭하여 비활성화 및 3D 모델 숨김)';
+                button.setAttribute('aria-label', `${itemName ? itemName + ' ' : ''}비활성화`);
+            }
+        }
 
         function getLinkGroupColor(node) {
             if (!node || typeof node !== 'object') return 0x9ca3af;
@@ -1640,6 +2956,7 @@ HTML_CONTENT = """
         function workspaceEditorSettings() {
             return {
                 fix_to_world: !!document.getElementById('fix-to-world')?.checked,
+                root_joint_mode: rootJointMode(),
                 export_mode: document.getElementById('export-mode')?.value || 'description',
             };
         }
@@ -2045,6 +3362,8 @@ HTML_CONTENT = """
             if (treeData._standalone) {
                 const importButton = document.getElementById('standalone-import-button');
                 if (importButton) importButton.style.display = '';
+                const reimportButton = document.getElementById('standalone-reimport-button');
+                if (reimportButton) reimportButton.style.display = treeData._empty ? 'none' : '';
                 const workspaceSaveButton = document.getElementById('workspace-save-button');
                 if (workspaceSaveButton) workspaceSaveButton.style.display = '';
                 const workspaceSaveAsButton = document.getElementById('workspace-save-as-button');
@@ -2056,15 +3375,18 @@ HTML_CONTENT = """
                 }
                 const editorSettings = treeData._editor_settings || {};
                 const fixToWorld = document.getElementById('fix-to-world');
-                const fixToWorldLabel = document.getElementById('fix-to-world-label');
-                if (fixToWorld && typeof editorSettings.fix_to_world === 'boolean') {
-                    fixToWorld.checked = editorSettings.fix_to_world;
-                    if (fixToWorldLabel) {
-                        fixToWorldLabel.classList.toggle(
-                            'checked-state',
-                            editorSettings.fix_to_world
-                        );
-                    }
+                const rootJointModeInput = document.getElementById('root-joint-mode');
+                const restoredRootMode = ['world', 'base_footprint', 'none'].includes(
+                    editorSettings.root_joint_mode
+                )
+                    ? editorSettings.root_joint_mode
+                    : (editorSettings.fix_to_world === false ? 'none' : 'world');
+                if (rootJointModeInput) rootJointModeInput.value = restoredRootMode;
+                if (fixToWorld) {
+                    fixToWorld.checked = restoredRootMode === 'world';
+                }
+                if (restoredRootMode === 'base_footprint' && !treeData._base_footprint_frame) {
+                    treeData._base_footprint_frame = { world_xyz: [0, 0, 0], rpy: [0, 0, 0], yaw: 0 };
                 }
                 const exportMode = document.getElementById('export-mode');
                 if (exportMode && editorSettings.export_mode === 'moveit') {
@@ -2181,9 +3503,49 @@ HTML_CONTENT = """
             }
         }
 
+        let standaloneImportIntent = 'new';
+
+        function configureStandaloneImportIntent(intent) {
+            standaloneImportIntent = intent === 'update' ? 'update' : 'new';
+            const updating = standaloneImportIntent === 'update';
+            const title = document.getElementById('standalone-import-title');
+            const note = document.getElementById('standalone-reimport-note');
+            const submit = document.getElementById('standalone-import-submit');
+            const projectName = document.getElementById('standalone-project-name');
+            const inventorDirect = document.getElementById('standalone-inventor-direct');
+            const inventorDirectTitle = document.getElementById('standalone-inventor-direct-title');
+            const tabs = document.querySelector('#standalone-import-modal .import-mode-tabs');
+            if (title) title.textContent = updating ? 'CAD 업데이트' : '불러오기';
+            if (note) note.style.display = updating ? 'block' : 'none';
+            if (submit) submit.textContent = updating ? '업데이트 적용' : '가져오기';
+            if (projectName) projectName.readOnly = updating;
+            if (inventorDirect) inventorDirect.style.display = 'block';
+            if (inventorDirectTitle) inventorDirectTitle.textContent = updating
+                ? '기존 편집을 유지하는 Inventor 직접 업데이트'
+                : 'IPT를 따로 선택하지 않는 Inventor 직접 연결';
+            if (tabs) tabs.style.display = updating ? 'none' : '';
+        }
+
         function openStandaloneImport() {
+            configureStandaloneImportIntent('new');
             const modal = document.getElementById('standalone-import-modal');
             const status = document.getElementById('standalone-import-status');
+            if (status) {
+                status.style.display = 'none';
+                status.classList.remove('error');
+                status.innerText = '';
+            }
+            setStandaloneImportMode('cad');
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function openStandaloneReimport() {
+            if (!treeData || treeData._empty) return;
+            configureStandaloneImportIntent('update');
+            const modal = document.getElementById('standalone-import-modal');
+            const status = document.getElementById('standalone-import-status');
+            const projectName = document.getElementById('standalone-project-name');
+            if (projectName) projectName.value = treeData._project_name || projectName.value;
             if (status) {
                 status.style.display = 'none';
                 status.classList.remove('error');
@@ -2201,22 +3563,36 @@ HTML_CONTENT = """
         async function importDirectInventor(endpoint) {
             const projectName = document.getElementById('standalone-project-name').value.trim();
             const status = document.getElementById('standalone-import-status');
+            const updating = standaloneImportIntent === 'update';
+            const requestEndpoint = updating
+                ? endpoint.replace('/import/', '/reimport/')
+                : endpoint;
             if (!projectName) {
                 status.style.display = 'block';
                 status.classList.add('error');
                 status.innerText = '프로젝트 이름을 입력하세요.';
                 return;
             }
+            if (updating && !window.confirm(
+                '현재 링크 그룹과 조인트 편집을 유지하면서 Inventor 조립품으로 업데이트할까요?'
+            )) return;
             status.style.display = 'block';
             status.classList.remove('error');
             status.innerText = endpoint.endsWith('active')
-                ? '현재 Inventor 조립품과 참조 부품을 읽고 있습니다...'
-                : 'Windows 파일 선택창에서 원본 IAM을 선택하세요...';
+                ? (updating
+                    ? '현재 Inventor 조립품을 읽고 기존 편집과 비교하고 있습니다...'
+                    : '현재 Inventor 조립품과 참조 부품을 읽고 있습니다...')
+                : (updating
+                    ? '업데이트할 원본 IAM을 선택하세요. 기존 편집과 비교하여 병합합니다...'
+                    : 'Windows 파일 선택창에서 원본 IAM을 선택하세요...');
             try {
-                const response = await fetch(endpoint, {
+                const response = await fetch(requestEndpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ project_name: projectName })
+                    body: JSON.stringify({
+                        project_name: projectName,
+                        tree: updating ? treeData : undefined,
+                    })
                 });
                 const result = await response.json();
                 if (!response.ok) throw new Error(result.error || 'Inventor 가져오기에 실패했습니다.');
@@ -2224,7 +3600,9 @@ HTML_CONTENT = """
                     status.innerText = '원본 IAM 선택을 취소했습니다.';
                     return;
                 }
-                status.innerText = `${result.report.parts}개 부품과 ${result.report.joints}개 조인트를 Inventor에서 가져왔습니다.`;
+                status.innerText = updating
+                    ? `Inventor 직접 업데이트 완료 · ${result.reimport?.matched_parts || 0}개 부품의 링크·조인트 편집을 유지했습니다.`
+                    : `${result.report.parts}개 부품과 ${result.report.joints}개 조인트를 Inventor에서 가져왔습니다.`;
                 window.location.reload();
             } catch (error) {
                 status.classList.add('error');
@@ -2238,12 +3616,16 @@ HTML_CONTENT = """
             const projectName = document.getElementById('standalone-project-name').value.trim();
             const status = document.getElementById('standalone-import-status');
             const selectedCount = (files ? files.length : 0) + (folderFiles ? folderFiles.length : 0);
+            const updating = standaloneImportIntent === 'update';
             if (!projectName || selectedCount === 0) {
                 status.style.display = 'block';
                 status.classList.add('error');
                 status.innerText = '프로젝트 이름과 조립품 파일 또는 프로젝트 폴더가 필요합니다.';
                 return;
             }
+            if (updating && !window.confirm(
+                '현재 링크 그룹과 조인트 편집을 유지하면서 선택한 CAD로 형상을 업데이트할까요?'
+            )) return;
             const allSelectedFiles = [
                 ...Array.from(files || []),
                 ...Array.from(folderFiles || [])
@@ -2261,18 +3643,30 @@ HTML_CONTENT = """
             }
             status.style.display = 'block';
             status.classList.remove('error');
-            status.innerText = '형상과 조립 정보를 분석하고 있습니다...';
+            status.innerText = updating
+                ? '업데이트된 부품을 기존 편집 작업과 비교하고 있습니다...'
+                : '형상과 조립 정보를 분석하고 있습니다...';
             const form = new FormData();
             form.append('project_name', projectName);
             Array.from(files).forEach(file => form.append('files', file));
             Array.from(folderFiles).forEach(file => {
                 form.append('relative_files', file, file.webkitRelativePath || file.name);
             });
+            if (updating) form.append('tree', JSON.stringify(treeData));
             try {
-                const response = await fetch('/import', { method: 'POST', body: form });
+                const response = await fetch(updating ? '/reimport' : '/import', { method: 'POST', body: form });
                 const result = await response.json();
-                if (!response.ok) throw new Error(result.error || '가져오기에 실패했습니다.');
-                status.innerText = `${result.report.parts}개 부품과 ${result.report.joints}개 조인트를 가져왔습니다.`;
+                if (!response.ok) throw new Error(
+                    result.error || (updating ? 'CAD 업데이트에 실패했습니다.' : '가져오기에 실패했습니다.')
+                );
+                if (updating) {
+                    const changedCount = Array.isArray(result.reimport?.changed_parts)
+                        ? result.reimport.changed_parts.length
+                        : 0;
+                    status.innerText = `CAD 업데이트 완료 · ${result.reimport?.matched_parts || 0}개 부품의 편집을 유지하고 ${changedCount}개 변경을 반영했습니다.`;
+                } else {
+                    status.innerText = `${result.report.parts}개 부품과 ${result.report.joints}개 조인트를 가져왔습니다.`;
+                }
                 window.location.reload();
             } catch (error) {
                 status.classList.add('error');
@@ -2433,7 +3827,11 @@ HTML_CONTENT = """
                 color: 0xffd54f,
                 transparent: true,
                 opacity: 0.95,
-                depthTest: false,
+                // Keep the marker from showing through the opposite side of the
+                // model.  It used to ignore the depth buffer, which made the
+                // ground-selection ring look as if it entered the solid.
+                depthTest: true,
+                depthWrite: false,
                 side: THREE.DoubleSide,
             });
             groundSnapMarker = new THREE.Group();
@@ -2466,11 +3864,15 @@ HTML_CONTENT = """
             const normal = worldNormal && worldNormal.lengthSq() > 0.5
                 ? worldNormal.clone().normalize()
                 : new THREE.Vector3(0, 1, 0);
-            marker.position.copy(worldPoint);
-            marker.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
             const markerRadius = Number(exactRadius) > 0
                 ? Number(exactRadius)
                 : groundSnapMarkerRadius();
+            // The torus has a tube radius of 0.085. Lift it by roughly that
+            // amount so it rests on the selected surface instead of intersecting
+            // it, while depth testing still hides portions occluded by geometry.
+            const surfaceOffset = Math.max(0.002, markerRadius * 0.09);
+            marker.position.copy(worldPoint).addScaledVector(normal, surfaceOffset);
+            marker.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
             marker.scale.setScalar(markerRadius);
             marker.traverse(child => {
                 if (child.material && child.material.color) {
@@ -2484,22 +3886,270 @@ HTML_CONTENT = """
             if (groundSnapMarker) groundSnapMarker.visible = false;
         }
 
+        function ensureJointSnapMarker() {
+            if (jointSnapMarker || !scene) return jointSnapMarker;
+
+            const overlayMaterial = (color, opacity = 1) => new THREE.MeshBasicMaterial({
+                color,
+                transparent: opacity < 1,
+                opacity,
+                depthTest: false,
+                depthWrite: false,
+                side: THREE.DoubleSide,
+            });
+            const lineMaterial = (color, opacity = 1) => new THREE.LineBasicMaterial({
+                color,
+                transparent: opacity < 1,
+                opacity,
+                depthTest: false,
+                depthWrite: false,
+            });
+
+            jointSnapMarker = new THREE.Group();
+            jointSnapMarker.name = 'petasos-joint-snap-marker';
+
+            const haloMaterial = overlayMaterial(0x35e7ff, 0.96);
+            const centerMaterial = overlayMaterial(0xffffff, 1);
+            const normalMaterial = overlayMaterial(0x4d9cff, 1);
+            const backNormalMaterial = overlayMaterial(0x7db7ff, 0.72);
+            jointSnapMarker.userData.haloMaterial = haloMaterial;
+            jointSnapMarker.userData.centerMaterial = centerMaterial;
+
+            const innerRing = new THREE.Mesh(
+                new THREE.TorusGeometry(0.72, 0.075, 12, 56),
+                haloMaterial
+            );
+            innerRing.name = 'joint-snap-inner-ring';
+            const outerRing = new THREE.Mesh(
+                new THREE.TorusGeometry(1, 0.035, 10, 64),
+                haloMaterial
+            );
+            outerRing.name = 'joint-snap-feature-ring';
+            jointSnapMarker.userData.outerRing = outerRing;
+
+            const center = new THREE.Mesh(
+                new THREE.SphereGeometry(0.18, 18, 14),
+                centerMaterial
+            );
+            center.name = 'joint-snap-center';
+
+            const crossGeometry = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(-1.18, 0, 0), new THREE.Vector3(1.18, 0, 0),
+                new THREE.Vector3(0, -1.18, 0), new THREE.Vector3(0, 1.18, 0),
+            ]);
+            const cross = new THREE.LineSegments(crossGeometry, lineMaterial(0x9af4ff, 0.9));
+            cross.name = 'joint-snap-plane-crosshair';
+
+            const addNormalArrow = (direction, material, name) => {
+                const shaft = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.045, 0.045, 1.12, 12),
+                    material
+                );
+                shaft.position.z = direction * 0.56;
+                shaft.rotation.x = Math.PI / 2;
+                const cone = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.14, 0.34, 16),
+                    material
+                );
+                cone.position.z = direction * 1.24;
+                cone.rotation.x = direction > 0 ? Math.PI / 2 : -Math.PI / 2;
+                shaft.name = `${name}-shaft`;
+                cone.name = `${name}-head`;
+                jointSnapMarker.add(shaft, cone);
+            };
+            addNormalArrow(1, normalMaterial, 'joint-snap-axis-forward');
+            addNormalArrow(-1, backNormalMaterial, 'joint-snap-axis-backward');
+
+            [innerRing, outerRing, center, cross].forEach((item, index) => {
+                item.renderOrder = 1100 + index;
+                jointSnapMarker.add(item);
+            });
+            jointSnapMarker.traverse(child => {
+                child.renderOrder = Math.max(Number(child.renderOrder) || 0, 1100);
+            });
+            jointSnapMarker.visible = false;
+            scene.add(jointSnapMarker);
+            return jointSnapMarker;
+        }
+
+        function showJointSnapMarker(
+            worldPoint,
+            worldNormal,
+            exactRadius = null,
+            selected = false
+        ) {
+            const marker = ensureJointSnapMarker();
+            if (!marker || !worldPoint) return;
+            if (marker.parent !== scene) scene.add(marker);
+            const normal = worldNormal && worldNormal.lengthSq() > 0.5
+                ? worldNormal.clone().normalize()
+                : new THREE.Vector3(0, 1, 0);
+            const baseRadius = groundSnapMarkerRadius();
+            const featureRadius = Number(exactRadius) > 0
+                ? Math.max(baseRadius * 0.9, Math.min(baseRadius * 2.4, Number(exactRadius)))
+                : baseRadius;
+            marker.position.copy(worldPoint).addScaledVector(normal, baseRadius * 0.025);
+            marker.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+            marker.scale.setScalar(baseRadius);
+            const outerRing = marker.userData.outerRing;
+            if (outerRing) outerRing.scale.setScalar(featureRadius / baseRadius);
+            marker.userData.haloMaterial.color.setHex(selected ? 0x66ff88 : 0x35e7ff);
+            marker.userData.centerMaterial.color.setHex(selected ? 0xeaffee : 0xffffff);
+            marker.visible = true;
+        }
+
+        function hideJointSnapMarker() {
+            if (jointSnapMarker) jointSnapMarker.visible = false;
+        }
+
+        function ensureBaseFootprintFrameMarker() {
+            if (baseFootprintFrameMarker || !scene) return baseFootprintFrameMarker;
+            baseFootprintFrameMarker = new THREE.Group();
+            baseFootprintFrameMarker.name = 'petasos-base-footprint-frame';
+
+            const plane = new THREE.GridHelper(2, 4, 0x50e3a4, 0x287c66);
+            plane.name = 'base-footprint-plane';
+            const planeMaterials = Array.isArray(plane.material) ? plane.material : [plane.material];
+            planeMaterials.forEach(material => {
+                material.transparent = true;
+                material.opacity = 0.82;
+                material.depthTest = false;
+                material.depthWrite = false;
+            });
+            plane.renderOrder = 1050;
+            baseFootprintFrameMarker.add(plane);
+
+            const ring = new THREE.Mesh(
+                new THREE.TorusGeometry(0.38, 0.035, 10, 48),
+                new THREE.MeshBasicMaterial({
+                    color: 0x5bffb0,
+                    transparent: true,
+                    opacity: 0.95,
+                    depthTest: false,
+                    depthWrite: false,
+                })
+            );
+            ring.rotation.x = Math.PI / 2;
+            ring.name = 'base-footprint-center-ring';
+            baseFootprintFrameMarker.add(ring);
+
+            const axes = [
+                { direction: new THREE.Vector3(1, 0, 0), color: 0xff4d4d },
+                { direction: new THREE.Vector3(0, 0, -1), color: 0x55dd77 },
+                { direction: new THREE.Vector3(0, 1, 0), color: 0x4d8dff },
+            ];
+            axes.forEach(({ direction, color }) => {
+                const arrow = new THREE.ArrowHelper(direction, new THREE.Vector3(), 1, color, 0.18, 0.09);
+                arrow.name = 'base-footprint-axis';
+                arrow.line.material.depthTest = false;
+                arrow.line.material.depthWrite = false;
+                arrow.cone.material.depthTest = false;
+                arrow.cone.material.depthWrite = false;
+                arrow.line.renderOrder = 1052;
+                arrow.cone.renderOrder = 1053;
+                baseFootprintFrameMarker.add(arrow);
+            });
+
+            const makeAxisLabel = (text, color, position) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 128;
+                canvas.height = 128;
+                const context = canvas.getContext('2d');
+                context.clearRect(0, 0, canvas.width, canvas.height);
+                context.beginPath();
+                context.arc(64, 64, 43, 0, Math.PI * 2);
+                context.fillStyle = 'rgba(10, 18, 22, 0.88)';
+                context.fill();
+                context.lineWidth = 8;
+                context.strokeStyle = color;
+                context.stroke();
+                context.fillStyle = '#ffffff';
+                context.font = 'bold 58px sans-serif';
+                context.textAlign = 'center';
+                context.textBaseline = 'middle';
+                context.fillText(text, 64, 67);
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.minFilter = THREE.LinearFilter;
+                const material = new THREE.SpriteMaterial({
+                    map: texture,
+                    transparent: true,
+                    depthTest: false,
+                    depthWrite: false,
+                });
+                const sprite = new THREE.Sprite(material);
+                sprite.name = `base-footprint-axis-label-${text.toLowerCase()}`;
+                sprite.position.copy(position);
+                sprite.scale.set(0.42, 0.42, 0.42);
+                sprite.renderOrder = 1060;
+                baseFootprintFrameMarker.add(sprite);
+            };
+            makeAxisLabel('X', '#ff4d4d', new THREE.Vector3(1.24, 0, 0));
+            makeAxisLabel('Y', '#55dd77', new THREE.Vector3(0, 0, -1.24));
+            makeAxisLabel('Z', '#4d8dff', new THREE.Vector3(0, 1.24, 0));
+
+            baseFootprintFrameMarker.visible = false;
+            scene.add(baseFootprintFrameMarker);
+            return baseFootprintFrameMarker;
+        }
+
+        function showBaseFootprintFrameMarker() {
+            const marker = ensureBaseFootprintFrameMarker();
+            const frame = treeData?._base_footprint_frame;
+            if (
+                !marker
+                || !frame
+                || rootJointMode() !== 'base_footprint'
+                || (!baseFootprintFrameSelected && !baseFootprintPickMode)
+            ) {
+                if (marker) marker.visible = false;
+                return;
+            }
+            const xyz = Array.isArray(frame.world_xyz) && frame.world_xyz.length === 3
+                ? frame.world_xyz.map(value => Number(value) || 0)
+                : [0, 0, 0];
+            const markerSize = Math.max(12, groundSnapMarkerRadius() * 3.2);
+            marker.position.copy(rosOffsetMetersToViewer(xyz));
+            const rpy = Array.isArray(frame.rpy) && frame.rpy.length === 3
+                ? frame.rpy.map(value => Number(value) || 0)
+                : [0, 0, Number(frame.yaw) || 0];
+            const rosRotation = new THREE.Matrix4().makeRotationFromEuler(
+                new THREE.Euler(rpy[0], rpy[1], rpy[2], 'ZYX')
+            );
+            const rosToViewerDirection = vector => new THREE.Vector3(
+                vector.x,
+                vector.z,
+                -vector.y
+            );
+            const viewerXAxis = rosToViewerDirection(
+                new THREE.Vector3(1, 0, 0).applyMatrix4(rosRotation)
+            ).normalize();
+            const viewerYAxis = rosToViewerDirection(
+                new THREE.Vector3(0, 0, 1).applyMatrix4(rosRotation)
+            ).normalize();
+            const viewerZAxis = rosToViewerDirection(
+                new THREE.Vector3(0, -1, 0).applyMatrix4(rosRotation)
+            ).normalize();
+            marker.quaternion.setFromRotationMatrix(
+                new THREE.Matrix4().makeBasis(viewerXAxis, viewerYAxis, viewerZAxis)
+            );
+            marker.scale.setScalar(markerSize);
+            marker.visible = true;
+        }
+
         function attachJointSnapMarkerToRig() {
             if (!activeJointSnapMarkerInfo) return;
             const controller = previewJointControllers.find(
                 item => item.jointInfo === activeJointSnapMarkerInfo
             );
-            const marker = ensureGroundSnapMarker();
+            const marker = ensureJointSnapMarker();
             if (!controller || !marker) return;
             controller.pivot.add(marker);
             marker.position.set(0, 0, 0);
             marker.quaternion.identity();
             marker.scale.setScalar(groundSnapMarkerRadius());
-            marker.traverse(child => {
-                if (child.material && child.material.color) {
-                    child.material.color.setHex(0x66ff88);
-                }
-            });
+            if (marker.userData.outerRing) marker.userData.outerRing.scale.setScalar(1);
+            marker.userData.haloMaterial.color.setHex(0x66ff88);
+            marker.userData.centerMaterial.color.setHex(0xeaffee);
             marker.visible = true;
         }
 
@@ -2990,9 +4640,15 @@ HTML_CONTENT = """
             return '면 중심';
         }
 
-        function resolveSurfaceSnap(hit, planarSnap) {
+        function resolveSurfaceSnap(hit, planarSnap, preferPlanarRegion = false) {
             if (!hit) return null;
-            const exactCadSnap = cadSnapCandidate(hit, planarSnap);
+            // Ground placement is a face operation: use the centroid of the
+            // connected planar region even when a circle, edge, or vertex CAD
+            // snap is nearby. Joint placement keeps the exact CAD-entity
+            // priority because its intent is different.
+            const exactCadSnap = preferPlanarRegion
+                ? null
+                : cadSnapCandidate(hit, planarSnap);
             if (exactCadSnap) return exactCadSnap;
             if (!planarSnap) return null;
             const localHitPoint = hit.object.worldToLocal(hit.point.clone());
@@ -3028,7 +4684,7 @@ HTML_CONTENT = """
         }
 
         function updateGroundFaceSnapPreview(event) {
-            if ((!groundFacePickMode && !jointOriginPickMode) || !event) return;
+            if ((!groundFacePickMode && !baseFootprintPickMode && !jointOriginPickMode) || !event) return;
             const intersections = getViewerIntersections(
                 event,
                 { refreshMatrices: false }
@@ -3039,16 +4695,21 @@ HTML_CONTENT = """
                 { hoverOnly: true }
             );
             if (!selection) {
-                hideGroundSnapMarker();
+                if (jointOriginPickMode) hideJointSnapMarker();
+                else hideGroundSnapMarker();
                 return;
             }
             const { hit, snap } = selection;
             const component = selection.component || '선택한 부품';
             const worldCenter = hit.object.localToWorld(snap.localCenter.clone());
-            const worldNormal = snap.localNormal.clone()
-                .transformDirection(hit.object.matrixWorld)
-                .normalize();
-            showGroundSnapMarker(worldCenter, worldNormal, false, snap.circleRadius);
+            const worldNormal = snap.localNormal
+                ? snap.localNormal.clone().transformDirection(hit.object.matrixWorld).normalize()
+                : new THREE.Vector3(0, 1, 0);
+            if (jointOriginPickMode) {
+                showJointSnapMarker(worldCenter, worldNormal, snap.circleRadius, false);
+            } else {
+                showGroundSnapMarker(worldCenter, worldNormal, false, snap.circleRadius);
+            }
             const directionHint = snap.snapSource === 'opencascade'
                 ? ` · ${snapDisplayLabel(snap)} 정확 스냅${
                     selection.candidateCount > 1
@@ -3066,6 +4727,10 @@ HTML_CONTENT = """
                 updateJointSnapCandidateControls(selection);
                 updateJointOriginPickUi(
                     `자석 중심: ${component}${directionHint} · 클릭하면 이 점이 조인트 원점, 면의 법선이 축이 됩니다.`
+                );
+            } else if (baseFootprintPickMode) {
+                updateBaseFootprintPickUi(
+                    `BASE FOOTPRINT 후보: ${component}${directionHint} · 클릭하면 이 위치만 별도로 저장됩니다.`
                 );
             } else {
                 updateGroundFaceUi(
@@ -3087,6 +4752,67 @@ HTML_CONTENT = """
                 groundSnapLastHoverAt = now;
                 updateGroundFaceSnapPreview(groundSnapHoverEvent);
             });
+        }
+
+        function updateBaseFootprintPickUi(message) {
+            const status = document.getElementById('viewer-pick-status');
+            if (!status) return;
+            status.textContent = message;
+            status.style.display = 'block';
+            clearTimeout(status._hideTimer);
+            if (!baseFootprintPickMode) {
+                status._hideTimer = setTimeout(() => { status.style.display = 'none'; }, 3200);
+            }
+        }
+
+        function currentGroundOriginOffset() {
+            const stored = treeData?._preview_ground_face?.origin_offset_xyz;
+            if (!Array.isArray(stored) || stored.length !== 3) return [0, 0, 0];
+            return stored.map(value => Number.isFinite(Number(value)) ? Number(value) : 0);
+        }
+
+        function updateGroundOriginOffsetInputs() {
+            const offset = currentGroundOriginOffset();
+            ['x', 'y', 'z'].forEach((axis, index) => {
+                const input = document.getElementById(`ground-offset-${axis}`);
+                if (!input || document.activeElement === input) return;
+                input.value = String(Number((offset[index] * 1000).toFixed(3)));
+            });
+        }
+
+        function rosOffsetMetersToViewer(offset) {
+            const unitsPerMeter = Number(treeData?._preview_units_per_meter) || 1000.0;
+            // ROS uses Z-up while the Three.js preview uses Y-up.
+            return new THREE.Vector3(offset[0], offset[2], -offset[1])
+                .multiplyScalar(unitsPerMeter);
+        }
+
+        function setGroundOriginOffset(axis, rawValue) {
+            if (!treeData?._preview_ground_face || !robotRoot) return;
+            const axisIndex = { x: 0, y: 1, z: 2 }[String(axis).toLowerCase()];
+            const millimeters = Number(rawValue);
+            if (axisIndex === undefined || !Number.isFinite(millimeters)) {
+                updateGroundOriginOffsetInputs();
+                updateGroundFaceUi('위치 보정값은 유한한 숫자로 입력하세요.');
+                return;
+            }
+            const value = millimeters / 1000;
+            const previous = currentGroundOriginOffset();
+            if (Math.abs(previous[axisIndex] - value) <= 1e-12) return;
+            saveState();
+            const next = previous.slice();
+            next[axisIndex] = value;
+            const delta = next.map((item, index) => item - previous[index]);
+            robotRoot.position.add(rosOffsetMetersToViewer(delta));
+            robotRoot.updateMatrixWorld(true);
+            treeData._preview_ground_face.origin_offset_xyz = next;
+            syncPreviewRootTransform();
+            updateGroundOriginOffsetInputs();
+            refreshWorldReferencePlane(0);
+            render({ skipPreview: true });
+            updateGroundFaceUi(
+                `모델 위치 보정 적용: X ${(next[0] * 1000).toFixed(1)}, Y ${(next[1] * 1000).toFixed(1)}, Z ${(next[2] * 1000).toFixed(1)} mm`
+            );
         }
 
         function updateGroundFaceUi(message) {
@@ -3112,15 +4838,18 @@ HTML_CONTENT = """
                 state.textContent = hasGroundOrigin ? '설정 완료' : '필수 설정';
             }
             if (container) {
-                container.classList.toggle('ground-face-picking', groundFacePickMode);
+                container.classList.toggle('ground-face-picking', groundFacePickMode || baseFootprintPickMode);
                 container.classList.toggle('joint-origin-picking', jointOriginPickMode);
             }
+            updateGroundOriginOffsetInputs();
             if (help && message) help.textContent = message;
         }
 
         function toggleGroundFacePick() {
             if (jointOriginPickMode) cancelJointOriginPick();
+            baseFootprintPickMode = false;
             activeJointSnapMarkerInfo = null;
+            hideJointSnapMarker();
             groundFacePickMode = !groundFacePickMode;
             if (!groundFacePickMode) hideGroundSnapMarker();
             updateGroundFaceUi(
@@ -3134,6 +4863,7 @@ HTML_CONTENT = """
             if (!treeData || !robotRoot) return;
             saveState();
             groundFacePickMode = false;
+            baseFootprintPickMode = false;
             hideGroundSnapMarker();
             clearCustomGroundTransform();
             applyRobotRootUpAxis(resolvePreviewUpAxis());
@@ -3237,6 +4967,7 @@ HTML_CONTENT = """
                 clearCustomGroundTransform();
             }
             groundFacePickMode = false;
+            baseFootprintPickMode = false;
             hideGroundSnapMarker();
             applyRobotRootUpAxis(normalized);
             fitCameraToRobot();
@@ -3280,6 +5011,10 @@ HTML_CONTENT = """
             
             // X, Y, Z 축 표시 (크기 500)
             worldFrameHelper = new THREE.AxesHelper(500);
+            // Three.js is Y-up, while every coordinate shown/exported by this
+            // editor is ROS Z-up. Rotate the visual world axes into the same
+            // convention as BASE FOOTPRINT: X red, Y green, Z blue.
+            worldFrameHelper.rotation.x = -Math.PI / 2;
             scene.add(worldFrameHelper);
 
             // 💡 렌더링 확인용 테스트 큐브 (와이어프레임) 추가
@@ -3312,7 +5047,7 @@ HTML_CONTENT = """
                 }
             });
             renderer.domElement.addEventListener('pointermove', event => {
-                if ((groundFacePickMode || jointOriginPickMode) && !viewerPointerDown) {
+                if ((groundFacePickMode || baseFootprintPickMode || jointOriginPickMode) && !viewerPointerDown) {
                     scheduleGroundFaceSnapPreview(event);
                 }
                 if (viewerPointerDown && Math.hypot(
@@ -3338,9 +5073,10 @@ HTML_CONTENT = """
                 viewerPointerDown = null;
                 viewerPointerDragged = false;
                 if (!shouldPick) return;
-                if (jointOriginPickMode || groundFacePickMode) {
+                if (jointOriginPickMode || groundFacePickMode || baseFootprintPickMode) {
                     suppressViewerDoubleClickUntil = performance.now() + 450;
                     if (jointOriginPickMode) handleJointOriginPick(event);
+                    else if (baseFootprintPickMode) handleBaseFootprintPick(event);
                     else handleGroundFacePick(event);
                     return;
                 }
@@ -3368,6 +5104,8 @@ HTML_CONTENT = """
                 if (!shouldPick) return;
                 if (jointOriginPickMode) {
                     handleJointOriginPick(event);
+                } else if (baseFootprintPickMode) {
+                    handleBaseFootprintPick(event);
                 } else if (groundFacePickMode) {
                     handleGroundFacePick(event);
                 } else {
@@ -3388,6 +5126,7 @@ HTML_CONTENT = """
             
             const loader = new THREE.STLLoader();
             const previewTransforms = treeData._preview_transforms || {};
+            const meshRevision = encodeURIComponent(treeData._mesh_revision || 'current');
             
             const flatLinks = getFlatLinks(treeData, null, -1);
             const allComponents = new Set();
@@ -3446,6 +5185,7 @@ HTML_CONTENT = """
                 buildPreviewJointRig();
                 buildPreviewFrames();
                 renderPreviewJointControls();
+                showBaseFootprintFrameMarker();
 
                 if (viewerStatus) {
                     const importWarnings = (treeData._import_report && treeData._import_report.warnings) || [];
@@ -3462,7 +5202,7 @@ HTML_CONTENT = """
             }
 
             allComponents.forEach(comp => {
-                const stlUrl = '/meshes/' + encodeURIComponent(comp) + '.stl';
+                const stlUrl = '/meshes/' + encodeURIComponent(comp) + '.stl?v=' + meshRevision;
                 
                 loader.load(stlUrl, function (geometry) {
                     const mesh = new THREE.Mesh(geometry, defaultMaterial);
@@ -3737,6 +5477,10 @@ HTML_CONTENT = """
                     } else {
                         pivot.rotation.set(rpy[0], rpy[1], rpy[2]);
                     }
+                    const childDisabled = isJointDisabled(child) || isLinkDisabled(child.link_group);
+                    if (childDisabled) {
+                        pivot.visible = false;
+                    }
                     parentContainer.add(pivot);
                     attachSubtreeToPivot(child.link_group, pivot);
 
@@ -3746,23 +5490,42 @@ HTML_CONTENT = """
                     // prismatic joints and rotates with revolute joints.
                     const jointFrame = new THREE.AxesHelper(120);
                     jointFrame.visible = false;
+                    jointFrame.userData.petasosJoint = child;
+                    jointFrame.userData.petasosJointName = child.joint_name;
                     pivot.add(jointFrame);
                     jointFrameHelpers.push(jointFrame);
 
-                    previewJointControllers.push({
-                        name: child.joint_name,
-                        type: child.joint_type || jointInfo.type || 'fixed',
-                        jointObj: child,
-                        jointInfo,
-                        axis,
-                        pivot,
-                        basePosition: pivot.position.clone(),
-                        baseQuaternion: pivot.quaternion.clone(),
-                        unitsPerMeter: previewUnitsPerMeter,
-                        lowerLimit: jointInfo.lower_limit,
-                        upperLimit: jointInfo.upper_limit,
-                        value: 0
-                    });
+                    if (!childDisabled) {
+                        const storedInitialPosition = Number(jointInfo.initial_position);
+                        const initialPreviewValue = Number.isFinite(storedInitialPosition)
+                            ? (
+                                (child.joint_type || jointInfo.type) === 'prismatic'
+                                    ? storedInitialPosition
+                                    : THREE.MathUtils.radToDeg(storedInitialPosition)
+                            )
+                            : 0;
+                        previewJointControllers.push({
+                            name: child.joint_name,
+                            type: child.joint_type || jointInfo.type || 'fixed',
+                            jointObj: child,
+                            jointInfo,
+                            axis,
+                            pivot,
+                            basePosition: pivot.position.clone(),
+                            baseQuaternion: pivot.quaternion.clone(),
+                            unitsPerMeter: previewUnitsPerMeter,
+                            lowerLimit: jointInfo.lower_limit,
+                            upperLimit: jointInfo.upper_limit,
+                            value: initialPreviewValue
+                        });
+
+                        // Apply the exported initial pose before constructing the
+                        // child pivots so nested joints inherit the configured pose.
+                        setPreviewJointValue(
+                            previewJointControllers.length - 1,
+                            initialPreviewValue
+                        );
+                    }
 
                     walk(child.link_group, pivot);
                 });
@@ -3771,6 +5534,7 @@ HTML_CONTENT = """
             walk(treeData, robotRoot);
             attachJointSnapMarkerToRig();
             applyPreviewControlState();
+            applyViewerIsolationVisibility();
             previewRigReady = true;
             previewRigDirty = false;
             previewControlsDirty = false;
@@ -3778,11 +5542,27 @@ HTML_CONTENT = """
 
         function clearPreviewJointRig() {
             robotRoot.updateMatrixWorld(true);
-            Object.values(meshDict).forEach(mesh => {
-                if (mesh.parent && robotRoot) robotRoot.attach(mesh);
+
+            function restoreStoredComponentTransform(component, mesh) {
+                if (!mesh || !robotRoot) return;
+                if (mesh.parent) robotRoot.attach(mesh);
+                const values = treeData?._preview_transforms?.[component];
+                if (!Array.isArray(values) || values.length !== 16) return;
+                const storedMatrix = new THREE.Matrix4().fromArray(values);
+                storedMatrix.decompose(mesh.position, mesh.quaternion, mesh.scale);
+                mesh.updateMatrix();
+                mesh.updateMatrixWorld(true);
+            }
+
+            // A rig rebuild can happen while several joints are already at a
+            // non-zero preview pose.  Start again from the stored component
+            // transforms; otherwise preserving the posed world transforms and
+            // applying initial_position again doubles every ancestor motion.
+            Object.entries(meshDict).forEach(([component, mesh]) => {
+                restoreStoredComponentTransform(component, mesh);
             });
-            Object.values(collisionMeshDict).forEach(mesh => {
-                if (mesh.parent && robotRoot) robotRoot.attach(mesh);
+            Object.entries(collisionMeshDict).forEach(([component, mesh]) => {
+                restoreStoredComponentTransform(component, mesh);
             });
 
             jointFrameHelpers.forEach(helper => {
@@ -3851,6 +5631,26 @@ HTML_CONTENT = """
             );
             if (expanded) expandedPreviewJointDetails.add(key);
             else expandedPreviewJointDetails.delete(key);
+        }
+
+        function activatePreviewJoint(index, event = null) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            const controller = previewJointControllers[index];
+            const jointObj = controller?.jointObj;
+            const childNode = jointObj?.link_group;
+            if (!jointObj || !childNode) return;
+            const alreadySelected = selectedElement?.type === 'joint'
+                && selectedElement.jointObj === jointObj;
+            if (!alreadySelected) {
+                selectElement('joint', childNode, jointObj);
+                return;
+            }
+            updateSelectedJointFrameVisibility();
+            updatePanel();
+            renderPreviewJointControls();
         }
 
         function renderPreviewJointControls() {
@@ -3924,10 +5724,18 @@ HTML_CONTENT = """
 
                     const wrapper = document.createElement('div');
                     const detailsExpanded = expandedPreviewJointDetails.has(controller.name);
-                    wrapper.className = `joint-control${detailsExpanded ? ' details-expanded' : ''}`;
+                    const isSelected = selectedElement?.type === 'joint'
+                        && (
+                            selectedElement.jointObj === controller.jointObj
+                            || selectedElement.jointObj?.joint_name === controller.name
+                        );
+                    wrapper.className = `joint-control${detailsExpanded ? ' details-expanded' : ''}${isSelected ? ' is-selected' : ''}`;
                     wrapper.innerHTML = `
                         <div class="joint-title">
-                            <span>${controller.name}</span>
+                            <button type="button" class="joint-name-button"
+                                    aria-pressed="${isSelected ? 'true' : 'false'}"
+                                    title="${controller.name} 조인트 속성 열기"
+                                    onclick="activatePreviewJoint(${index}, event)">${controller.name}</button>
                             <span class="joint-badge-ui">${controller.type}</span>
                         </div>
                         <input class="joint-slider" type="range" min="${min}" max="${max}" step="${step}" value="${currentValue}" data-preview-joint="${index}">
@@ -4076,8 +5884,7 @@ HTML_CONTENT = """
 
         function setPreviewJointAxisType(index, type) {
             const controller = previewJointControllers[index];
-            if (!controller) return;
-            saveState();
+            if (!controller || !controller.jointObj) return;
             let axis = [0, 0, 1];
             if (type === 'x') axis = [1, 0, 0];
             else if (type === 'nx') axis = [-1, 0, 0];
@@ -4086,55 +5893,38 @@ HTML_CONTENT = """
             else if (type === 'z') axis = [0, 0, 1];
             else if (type === 'nz') axis = [0, 0, -1];
             else {
-                axis = controller.jointInfo.axis || [1, 0, 0];
+                axis = (controller.jointInfo && controller.jointInfo.axis) || [1, 0, 0];
             }
-            controller.jointInfo.axis = axis;
-            controller.axis.set(axis[0], axis[1], axis[2]);
-            if (controller.axis.lengthSq() > 0) controller.axis.normalize();
-            else controller.axis.set(0, 0, 1);
-            
+
             const customRow = document.getElementById(`custom-axis-${index}`);
             if (customRow) customRow.style.display = (type === 'custom') ? 'grid' : 'none';
-            
+
             if (type === 'custom') {
                 const inputs = customRow.querySelectorAll('input');
                 inputs[0].value = axis[0];
                 inputs[1].value = axis[1];
                 inputs[2].value = axis[2];
             }
-            
-            setPreviewJointValue(index, controller.value);
+
+            applyJointAxisChange(controller.jointObj, axis, `preview_axis_${type}`);
         }
 
         function setPreviewJointAxisVal(index, dim, val) {
             const controller = previewJointControllers[index];
-            if (!controller) return;
-            saveState();
-            const axis = controller.jointInfo.axis || [0, 0, 1];
-            if (dim === 'x') axis[0] = val;
-            else if (dim === 'y') axis[1] = val;
-            else if (dim === 'z') axis[2] = val;
-            controller.jointInfo.axis = axis;
-            controller.axis.set(axis[0], axis[1], axis[2]);
-            if (controller.axis.lengthSq() > 0) controller.axis.normalize();
-            else controller.axis.set(0, 0, 1);
-            setPreviewJointValue(index, controller.value);
+            if (!controller || !controller.jointObj) return;
+            const axis = ((controller.jointInfo && controller.jointInfo.axis) || [0, 0, 1]).slice();
+            if (dim === 'x') axis[0] = Number(val);
+            else if (dim === 'y') axis[1] = Number(val);
+            else if (dim === 'z') axis[2] = Number(val);
+            applyJointAxisChange(controller.jointObj, axis, 'preview_custom_axis');
         }
 
         function setPreviewJointAxisCandidate(index, candidateIndex) {
             const controller = previewJointControllers[index];
-            if (!controller || !controller.jointInfo) return;
+            if (!controller || !controller.jointObj || !controller.jointInfo) return;
             const candidate = (controller.jointInfo._axis_candidates || [])[candidateIndex];
             if (!candidate) return;
-            saveState();
-            const axis = candidate.axis.slice();
-            controller.jointInfo.axis = axis;
-            controller.jointInfo._axis_source = candidate.label;
-            controller.axis.set(axis[0], axis[1], axis[2]);
-            if (controller.axis.lengthSq() > 0) controller.axis.normalize();
-            else controller.axis.set(0, 0, 1);
-            renderPreviewJointControls();
-            setPreviewJointValue(index, controller.value);
+            applyJointAxisChange(controller.jointObj, candidate.axis.slice(), candidate.label);
         }
 
         function setPreviewJointRpy(index, axisIndex, degrees) {
@@ -4317,6 +6107,15 @@ HTML_CONTENT = """
             const controller = previewJointControllers[index];
             if (!controller) return;
             controller.value = value;
+            if (controller.jointInfo) {
+                controller.jointInfo.initial_position = controller.type === 'prismatic'
+                    ? Number(value)
+                    : THREE.MathUtils.degToRad(Number(value));
+            }
+            if (treeData) {
+                treeData._preview_joint_positions = treeData._preview_joint_positions || {};
+                treeData._preview_joint_positions[controller.name] = Number(value) || 0;
+            }
             controller.pivot.position.copy(controller.basePosition);
             controller.pivot.quaternion.copy(controller.baseQuaternion);
 
@@ -4339,6 +6138,432 @@ HTML_CONTENT = """
             document.querySelectorAll(`[data-preview-joint="${index}"]`).forEach(slider => {
                 if (document.activeElement !== slider) slider.value = value;
             });
+            document.querySelectorAll(`[data-set-joint-zero="${index}"]`).forEach(button => {
+                const numericValue = Number(value) || 0;
+                const unit = controller.type === 'prismatic' ? ' m' : '°';
+                button.disabled = Math.abs(numericValue) <= 1e-9;
+                button.textContent = `현재 ${previewJointValueText(numericValue)}${unit} 자세를 0으로 설정`;
+            });
+        }
+
+        function shiftJointLimitsForNewZero(jointInfo, jointType, zeroOffset) {
+            if (!jointInfo || jointType === 'continuous') return;
+            ['lower_limit', 'upper_limit'].forEach(key => {
+                const value = Number(jointInfo[key]);
+                if (Number.isFinite(value)) jointInfo[key] = value - zeroOffset;
+            });
+        }
+
+        function shiftMimicOffsetsForNewZero(jointObj, zeroOffset) {
+            if (!treeData || !jointObj || !Number.isFinite(zeroOffset)) return;
+            const ownInfo = jointObj.joint_info || {};
+            if (ownInfo.mimic_joint) {
+                ownInfo.mimic_offset = Number(ownInfo.mimic_offset || 0) - zeroOffset;
+            }
+            getFlatLinks(treeData, null, -1).forEach(item => {
+                const candidate = item.jointObj;
+                if (!candidate || candidate === jointObj) return;
+                const candidateInfo = candidate.joint_info || {};
+                if (candidateInfo.mimic_joint !== jointObj.joint_name) return;
+                const multiplier = Number.isFinite(Number(candidateInfo.mimic_multiplier))
+                    ? Number(candidateInfo.mimic_multiplier)
+                    : 1;
+                candidateInfo.mimic_offset = Number(candidateInfo.mimic_offset || 0)
+                    + multiplier * zeroOffset;
+            });
+        }
+
+        function updateStoredJointWorldFrame(jointInfo, worldFrame, unitsPerMeter) {
+            if (!jointInfo || !worldFrame) return;
+            const position = new THREE.Vector3();
+            const quaternion = new THREE.Quaternion();
+            const scale = new THREE.Vector3();
+            worldFrame.decompose(position, quaternion, scale);
+            jointInfo._preview_world_frame_matrix = worldFrame.toArray();
+            jointInfo._preview_world_xyz = position.clone()
+                .divideScalar(unitsPerMeter)
+                .toArray();
+            jointInfo._preview_world_quaternion = quaternion.normalize().toArray();
+            if (!jointInfo._joint_snap) return;
+            const snap = jointInfo._joint_snap;
+            snap.root_point = position.toArray();
+            snap.root_tangent = new THREE.Vector3()
+                .setFromMatrixColumn(worldFrame, 0).normalize().toArray();
+            snap.root_y_axis = new THREE.Vector3()
+                .setFromMatrixColumn(worldFrame, 1).normalize().toArray();
+            snap.root_normal = new THREE.Vector3()
+                .setFromMatrixColumn(worldFrame, 2).normalize().toArray();
+            snap.zero_calibrated = true;
+        }
+
+        function applyJointZeroDeltaToSubtree(node, worldDelta, unitsPerMeter) {
+            if (!node || !worldDelta || !treeData) return;
+            treeData._preview_transforms = treeData._preview_transforms || {};
+            (node.components || []).forEach(component => {
+                const values = treeData._preview_transforms[component];
+                if (!Array.isArray(values) || values.length !== 16) return;
+                const transformed = worldDelta.clone().multiply(
+                    new THREE.Matrix4().fromArray(values)
+                );
+                treeData._preview_transforms[component] = transformed.toArray();
+            });
+            (node.children || []).forEach(child => {
+                const childInfo = child.joint_info || {};
+                const values = childInfo._preview_world_frame_matrix;
+                if (Array.isArray(values) && values.length === 16) {
+                    const transformed = worldDelta.clone().multiply(
+                        new THREE.Matrix4().fromArray(values)
+                    );
+                    updateStoredJointWorldFrame(childInfo, transformed, unitsPerMeter);
+                }
+                applyJointZeroDeltaToSubtree(child.link_group, worldDelta, unitsPerMeter);
+            });
+        }
+
+        function previewControllerZeroWorldFrame(controller) {
+            if (!controller || !controller.pivot || !controller.pivot.parent || !robotRoot) {
+                return null;
+            }
+            robotRoot.updateMatrixWorld(true);
+            controller.pivot.parent.updateMatrixWorld(true);
+            const baseLocalFrame = new THREE.Matrix4().compose(
+                controller.basePosition.clone(),
+                controller.baseQuaternion.clone(),
+                new THREE.Vector3(1, 1, 1)
+            );
+            return robotRoot.matrixWorld.clone().invert()
+                .multiply(controller.pivot.parent.matrixWorld)
+                .multiply(baseLocalFrame);
+        }
+
+        function previewControllerNeutralZeroWorldFrame(controller, entry) {
+            const posedZeroFrame = previewControllerZeroWorldFrame(controller);
+            if (!posedZeroFrame || !entry || !entry.parentNode || entry.parentNode === treeData) {
+                return posedZeroFrame;
+            }
+            const parentPivot = entry.parentNode._pivot;
+            if (!parentPivot || !robotRoot) return posedZeroFrame;
+
+            robotRoot.updateMatrixWorld(true);
+            parentPivot.updateMatrixWorld(true);
+            const posedParentFrame = robotRoot.matrixWorld.clone().invert()
+                .multiply(parentPivot.matrixWorld);
+            const neutralParentFrame = previewFrameMatrixForNode(entry.parentNode);
+            const parentPoseDelta = posedParentFrame.clone()
+                .multiply(neutralParentFrame.clone().invert());
+
+            // The live pivot sits below every currently posed ancestor. Remove
+            // that accumulated parent motion before using it as a stored frame;
+            // otherwise the ancestor pose is baked into the joint origin and
+            // then applied a second time when the rig is rebuilt.
+            return parentPoseDelta.invert().multiply(posedZeroFrame);
+        }
+
+        function cloneJsonValue(value) {
+            return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+        }
+
+        function setPreviewJointZero(index) {
+            const controller = previewJointControllers[index];
+            if (!controller || controller.type === 'fixed' || !controller.jointObj) return false;
+            const displayedOffset = Number(controller.value) || 0;
+            if (Math.abs(displayedOffset) <= 1e-9) return false;
+
+            const joint = controller.jointObj;
+            const jointInfo = controller.jointInfo || joint.joint_info || {};
+            const entry = jointEntryFor(joint);
+            if (!entry) return false;
+
+            saveState();
+            const parentFrame = previewFrameMatrixForNode(entry.parentNode);
+            const storedWorldValues = jointInfo._preview_world_frame_matrix;
+            // Stored component transforms are the neutral CAD pose, so the
+            // joint frame used to bake a new zero must be neutral as well.
+            // A live pivot is below posed ancestors (joint_3 is commonly near
+            // 160 degrees here); preferring it would bake that ancestor pose
+            // into joint_4 and apply it again on the next rig rebuild.
+            const previousWorldFrame = (
+                Array.isArray(storedWorldValues) && storedWorldValues.length === 16
+                    ? new THREE.Matrix4().fromArray(storedWorldValues)
+                    : previewControllerNeutralZeroWorldFrame(controller, entry)
+            ) || parentFrame.clone().multiply(
+                    new THREE.Matrix4().compose(
+                        controller.basePosition.clone(),
+                        controller.baseQuaternion.clone(),
+                        new THREE.Vector3(1, 1, 1)
+                    )
+                );
+            const axis = controller.axis.clone().normalize();
+            const jointMotion = controller.type === 'prismatic'
+                ? new THREE.Matrix4().makeTranslation(
+                    axis.x * displayedOffset * controller.unitsPerMeter,
+                    axis.y * displayedOffset * controller.unitsPerMeter,
+                    axis.z * displayedOffset * controller.unitsPerMeter
+                )
+                : new THREE.Matrix4().makeRotationAxis(
+                    axis,
+                    THREE.MathUtils.degToRad(displayedOffset)
+                );
+            // Build the new zero from the neutral zero frame. The resulting
+            // delta can safely be applied to neutral component transforms.
+            const worldZeroFrame = previousWorldFrame.clone().multiply(jointMotion);
+            const localZeroFrame = parentFrame.clone().invert().multiply(worldZeroFrame);
+            const worldDelta = worldZeroFrame.clone().multiply(previousWorldFrame.clone().invert());
+            const localPosition = new THREE.Vector3();
+            const localQuaternion = new THREE.Quaternion();
+            const localScale = new THREE.Vector3();
+            localZeroFrame.decompose(localPosition, localQuaternion, localScale);
+            const localRpy = new THREE.Euler().setFromQuaternion(localQuaternion, 'ZYX');
+            const unitsPerMeter = Number(controller.unitsPerMeter) || 1000.0;
+            const zeroOffset = controller.type === 'prismatic'
+                ? displayedOffset
+                : THREE.MathUtils.degToRad(displayedOffset);
+
+            const mimicOffsets = {};
+            getFlatLinks(treeData, null, -1).forEach(item => {
+                const candidate = item.jointObj;
+                const candidateInfo = candidate && candidate.joint_info;
+                if (!candidateInfo || candidateInfo.mimic_joint !== joint.joint_name) return;
+                mimicOffsets[candidate.joint_name] = candidateInfo.mimic_offset;
+            });
+            jointInfo._zero_calibration_backup = {
+                world_delta_matrix: worldDelta.toArray(),
+                previous_world_frame_matrix: cloneJsonValue(storedWorldValues),
+                previous_world_xyz: cloneJsonValue(jointInfo._preview_world_xyz),
+                previous_world_quaternion: cloneJsonValue(jointInfo._preview_world_quaternion),
+                previous_joint_snap: cloneJsonValue(jointInfo._joint_snap),
+                previous_initial_position: jointInfo.initial_position,
+                previous_lower_limit: jointInfo.lower_limit,
+                previous_upper_limit: jointInfo.upper_limit,
+                previous_provenance: jointInfo.provenance,
+                previous_zero_offset_calibration: jointInfo._zero_offset_calibration,
+                mimic_offsets: mimicOffsets,
+            };
+
+            joint.joint_info = jointInfo;
+            jointInfo.xyz = localPosition.clone().divideScalar(unitsPerMeter).toArray();
+            jointInfo.rpy = [localRpy.x, localRpy.y, localRpy.z];
+            jointInfo._manual_rpy = jointInfo.rpy.slice();
+            jointInfo._preview_local_quaternion = localQuaternion.normalize().toArray();
+            updateStoredJointWorldFrame(jointInfo, worldZeroFrame, unitsPerMeter);
+            jointInfo.initial_position = 0;
+            jointInfo._zero_offset_calibration = Number(
+                jointInfo._zero_offset_calibration || 0
+            ) + zeroOffset;
+            jointInfo.provenance = 'user_zero_calibrated';
+
+            shiftJointLimitsForNewZero(jointInfo, controller.type, zeroOffset);
+            shiftMimicOffsetsForNewZero(joint, zeroOffset);
+            applyJointZeroDeltaToSubtree(entry.node, worldDelta, unitsPerMeter);
+            treeData._preview_joint_positions = treeData._preview_joint_positions || {};
+            treeData._preview_joint_positions[joint.joint_name] = 0;
+            syncPickedJointLocalFrames();
+
+            previewRigDirty = true;
+            previewControlsDirty = true;
+            refreshPreviewRig();
+            render({ skipPreview: true });
+            updateSelectedJointFrameVisibility();
+
+            const status = document.getElementById('viewer-pick-status');
+            if (status) {
+                const unit = controller.type === 'prismatic' ? 'm' : '°';
+                status.textContent = `${joint.joint_name}: 기존 ${displayedOffset}${unit} 자세를 새 0으로 설정했습니다.`;
+                status.style.display = 'block';
+            }
+            return true;
+        }
+
+        function revertPreviewJointZero(index) {
+            const controller = previewJointControllers[index];
+            if (!controller || controller.type === 'fixed' || !controller.jointObj) return false;
+            const joint = controller.jointObj;
+            const jointInfo = controller.jointInfo || joint.joint_info || {};
+            const zeroOffset = Number(jointInfo._zero_offset_calibration);
+            const storedWorldValues = jointInfo._preview_world_frame_matrix;
+            const backup = jointInfo._zero_calibration_backup;
+            const entry = jointEntryFor(joint);
+            if (
+                !Number.isFinite(zeroOffset)
+                || Math.abs(zeroOffset) <= 1e-12
+                || !Array.isArray(storedWorldValues)
+                || storedWorldValues.length !== 16
+                || !entry
+            ) return false;
+
+            saveState();
+            const unitsPerMeter = Number(controller.unitsPerMeter) || 1000.0;
+            const axis = controller.axis.clone().normalize();
+            const bakedMotion = controller.type === 'prismatic'
+                ? new THREE.Matrix4().makeTranslation(
+                    axis.x * zeroOffset * unitsPerMeter,
+                    axis.y * zeroOffset * unitsPerMeter,
+                    axis.z * zeroOffset * unitsPerMeter
+                )
+                : new THREE.Matrix4().makeRotationAxis(axis, zeroOffset);
+            const currentWorldFrame = new THREE.Matrix4().fromArray(storedWorldValues);
+            const previousWorldFrame = Array.isArray(backup?.previous_world_frame_matrix)
+                && backup.previous_world_frame_matrix.length === 16
+                ? new THREE.Matrix4().fromArray(backup.previous_world_frame_matrix)
+                : currentWorldFrame.clone().multiply(bakedMotion.clone().invert());
+            const reverseWorldDelta = Array.isArray(backup?.world_delta_matrix)
+                && backup.world_delta_matrix.length === 16
+                ? new THREE.Matrix4().fromArray(backup.world_delta_matrix).invert()
+                : previousWorldFrame.clone().multiply(currentWorldFrame.clone().invert());
+            const parentFrame = previewFrameMatrixForNode(entry.parentNode);
+            const previousLocalFrame = parentFrame.clone().invert().multiply(previousWorldFrame);
+            const localPosition = new THREE.Vector3();
+            const localQuaternion = new THREE.Quaternion();
+            const localScale = new THREE.Vector3();
+            previousLocalFrame.decompose(localPosition, localQuaternion, localScale);
+            const localRpy = new THREE.Euler().setFromQuaternion(localQuaternion, 'ZYX');
+
+            jointInfo.xyz = localPosition.clone().divideScalar(unitsPerMeter).toArray();
+            jointInfo.rpy = [localRpy.x, localRpy.y, localRpy.z];
+            jointInfo._manual_rpy = jointInfo.rpy.slice();
+            jointInfo._preview_local_quaternion = localQuaternion.normalize().toArray();
+            updateStoredJointWorldFrame(jointInfo, previousWorldFrame, unitsPerMeter);
+            if (backup && Object.prototype.hasOwnProperty.call(backup, 'previous_joint_snap')) {
+                if (backup.previous_joint_snap === undefined) delete jointInfo._joint_snap;
+                else jointInfo._joint_snap = cloneJsonValue(backup.previous_joint_snap);
+            }
+            const currentInitial = Number(jointInfo.initial_position) || 0;
+            jointInfo.initial_position = backup
+                && Object.prototype.hasOwnProperty.call(backup, 'previous_initial_position')
+                ? backup.previous_initial_position
+                : currentInitial + zeroOffset;
+            if (backup) {
+                jointInfo.lower_limit = backup.previous_lower_limit;
+                jointInfo.upper_limit = backup.previous_upper_limit;
+                Object.entries(backup.mimic_offsets || {}).forEach(([name, value]) => {
+                    const candidate = getFlatLinks(treeData, null, -1)
+                        .map(item => item.jointObj)
+                        .find(item => item && item.joint_name === name);
+                    if (!candidate || !candidate.joint_info) return;
+                    if (value === undefined) delete candidate.joint_info.mimic_offset;
+                    else candidate.joint_info.mimic_offset = value;
+                });
+            } else {
+                shiftJointLimitsForNewZero(jointInfo, controller.type, -zeroOffset);
+                shiftMimicOffsetsForNewZero(joint, -zeroOffset);
+            }
+            applyJointZeroDeltaToSubtree(entry.node, reverseWorldDelta, unitsPerMeter);
+            if (backup && backup.previous_zero_offset_calibration !== undefined) {
+                jointInfo._zero_offset_calibration = backup.previous_zero_offset_calibration;
+            } else {
+                delete jointInfo._zero_offset_calibration;
+            }
+            jointInfo.provenance = backup?.previous_provenance || (
+                jointInfo._joint_snap
+                    ? 'user_3d_joint_pick'
+                    : 'user_zero_calibration_reverted'
+            );
+            delete jointInfo._zero_calibration_backup;
+            treeData._preview_joint_positions = treeData._preview_joint_positions || {};
+            treeData._preview_joint_positions[joint.joint_name] = controller.type === 'prismatic'
+                ? jointInfo.initial_position
+                : THREE.MathUtils.radToDeg(jointInfo.initial_position);
+            syncPickedJointLocalFrames();
+
+            previewRigDirty = true;
+            previewControlsDirty = true;
+            refreshPreviewRig();
+            render({ skipPreview: true });
+            updateSelectedJointFrameVisibility();
+            const status = document.getElementById('viewer-pick-status');
+            if (status) {
+                status.textContent = `${joint.joint_name}: 영점 재설정을 취소하고 직전 좌표계로 복원했습니다.`;
+                status.style.display = 'block';
+            }
+            return true;
+        }
+
+        function applyJointAxisChange(jointObj, targetAxis, sourceLabel = null) {
+            if (!jointObj || !Array.isArray(targetAxis) || targetAxis.length !== 3) return false;
+            const jointInfo = jointObj.joint_info || {};
+            jointObj.joint_info = jointInfo;
+
+            const oldAxis = Array.isArray(jointInfo.axis) && jointInfo.axis.length === 3
+                ? jointInfo.axis.map(Number)
+                : [0, 0, 1];
+            let newAxis = targetAxis.map(v => Number(v) || 0);
+            const len = Math.hypot(...newAxis);
+            if (len <= 1e-9) {
+                newAxis = [0, 0, 1];
+            } else {
+                newAxis = [newAxis[0] / len, newAxis[1] / len, newAxis[2] / len];
+            }
+
+            const oldLen = Math.hypot(...oldAxis) || 1;
+            const dot = (oldAxis[0] * newAxis[0] + oldAxis[1] * newAxis[1] + oldAxis[2] * newAxis[2]) / oldLen;
+            const isOpposite = Math.abs(dot + 1.0) < 1e-4;
+            const isSame = Math.abs(dot - 1.0) < 1e-4;
+
+            if (isSame && (!sourceLabel || jointInfo._axis_source === sourceLabel)) {
+                return false;
+            }
+
+            saveState();
+
+            const controllerIndex = previewJointControllers.findIndex(c => c.jointObj === jointObj);
+            const controller = controllerIndex >= 0 ? previewJointControllers[controllerIndex] : null;
+
+            if (isOpposite) {
+                // FLIP: 물리적 자세 보존 (시각적/기하학적 자세가 화면 밖으로 튀지 않도록 부호 반전)
+                jointInfo.axis = newAxis;
+                if (sourceLabel) jointInfo._axis_source = sourceLabel;
+
+                if (jointInfo.initial_position !== undefined) {
+                    jointInfo.initial_position = -Number(jointInfo.initial_position || 0);
+                }
+                if (jointInfo._zero_offset_calibration !== undefined) {
+                    jointInfo._zero_offset_calibration = -Number(jointInfo._zero_offset_calibration || 0);
+                }
+                if (jointInfo.lower_limit !== undefined && jointInfo.upper_limit !== undefined) {
+                    const oldLower = Number(jointInfo.lower_limit);
+                    const oldUpper = Number(jointInfo.upper_limit);
+                    jointInfo.lower_limit = -oldUpper;
+                    jointInfo.upper_limit = -oldLower;
+                }
+                if (controller) {
+                    controller.value = -Number(controller.value || 0);
+                    controller.axis.set(newAxis[0], newAxis[1], newAxis[2]);
+                    if (jointInfo.lower_limit !== undefined) controller.lowerLimit = jointInfo.lower_limit;
+                    if (jointInfo.upper_limit !== undefined) controller.upperLimit = jointInfo.upper_limit;
+                }
+                if (treeData && treeData._preview_joint_positions && treeData._preview_joint_positions[jointObj.joint_name] !== undefined) {
+                    treeData._preview_joint_positions[jointObj.joint_name] = -Number(treeData._preview_joint_positions[jointObj.joint_name] || 0);
+                }
+            } else {
+                // 직교/임의 방향으로 축 변경:
+                // 이미 영점 보정이 되어 있는 관절인 경우, 구 축 기준 베이크된 변환과의 충돌을 방지하기 위해
+                // 백업이 있으면 revertPreviewJointZero를 먼저 호출하여 메쉬와 좌표계를 원상 복구한 후 축을 변경
+                if (jointInfo._zero_calibration_backup && controllerIndex >= 0) {
+                    revertPreviewJointZero(controllerIndex);
+                }
+                jointInfo.axis = newAxis;
+                if (sourceLabel) jointInfo._axis_source = sourceLabel;
+                jointInfo.initial_position = 0;
+                if (controller) {
+                    controller.value = 0;
+                    controller.axis.set(newAxis[0], newAxis[1], newAxis[2]);
+                }
+                if (treeData && treeData._preview_joint_positions) {
+                    treeData._preview_joint_positions[jointObj.joint_name] = 0;
+                }
+            }
+
+            previewRigDirty = true;
+            previewControlsDirty = true;
+            render({ previewDelay: 40 });
+
+            const status = document.getElementById('viewer-pick-status');
+            if (status) {
+                const axisStr = newAxis.map(v => Number(v.toFixed(3))).join(', ');
+                status.textContent = `${jointObj.joint_name}: 회전/이동축을 [${axisStr}]로 변경했습니다.${isOpposite ? ' (물리적 자세 보존)' : ''}`;
+                status.style.display = 'block';
+            }
+            return true;
         }
 
         function capturePreviewJointPose() {
@@ -4457,6 +6682,7 @@ HTML_CONTENT = """
         }
 
         function applyViewerIsolationVisibility() {
+            const disabledComponents = getDisabledComponents();
             const isolatedComponents = viewerIsolatedComponent
                 ? new Set([viewerIsolatedComponent])
                 : (
@@ -4469,11 +6695,13 @@ HTML_CONTENT = """
                 : null;
             Object.entries(meshDict).forEach(([component, mesh]) => {
                 mesh.visible = visualMeshesEnabled
+                    && !disabledComponents.has(component)
                     && (!isolatedComponents || isolatedComponents.has(component))
                     && (!pickComponents || pickComponents.has(component));
             });
             Object.entries(collisionMeshDict).forEach(([component, mesh]) => {
                 mesh.visible = collisionMeshesEnabled
+                    && !disabledComponents.has(component)
                     && (!isolatedComponents || isolatedComponents.has(component))
                     && (!pickComponents || pickComponents.has(component));
             });
@@ -4529,8 +6757,25 @@ HTML_CONTENT = """
             if (gridHelper) gridHelper.visible = visible;
         }
 
+        function updateSelectedJointFrameVisibility() {
+            const showAllToggle = document.getElementById('show-joint-frames');
+            const showAll = showAllToggle ? showAllToggle.checked : false;
+            const selectedJoint = selectedElement?.type === 'joint'
+                ? selectedElement.jointObj
+                : null;
+            jointFrameHelpers.forEach(helper => {
+                const isSelected = !!selectedJoint && (
+                    helper.userData.petasosJoint === selectedJoint
+                    || helper.userData.petasosJointName === selectedJoint.joint_name
+                );
+                // A selected joint takes visual priority: hide every other
+                // frame so the user can identify this joint unambiguously.
+                helper.visible = selectedJoint ? isSelected : showAll;
+            });
+        }
+
         function toggleJointFrames(visible) {
-            jointFrameHelpers.forEach(helper => helper.visible = visible);
+            updateSelectedJointFrameVisibility();
         }
 
         function toggleLinkFrames(visible) {
@@ -4929,6 +7174,28 @@ HTML_CONTENT = """
         }
 
         function resolveBestSurfaceSnap(intersections, event = null, options = {}) {
+            if ((groundFacePickMode || baseFootprintPickMode) && !jointOriginPickMode) {
+                const groundHit = (intersections || []).find(
+                    item => item && item.face && item.object
+                );
+                if (groundHit) {
+                    const groundSnap = resolveSurfaceSnap(
+                        groundHit,
+                        planarFaceSnapCandidate(groundHit),
+                        true
+                    );
+                    if (groundSnap) {
+                        return {
+                            hit: groundHit,
+                            snap: groundSnap,
+                            component: viewerComponentForObject(groundHit.object) || '',
+                            candidateIndex: 0,
+                            candidateCount: 1,
+                            usedDepthSelection: false,
+                        };
+                    }
+                }
+            }
             const exactCandidates = projectedCadSnapCandidates(
                 event,
                 intersections,
@@ -5036,6 +7303,45 @@ HTML_CONTENT = """
                 candidateCount: 1,
                 usedDepthSelection: false,
             };
+        }
+
+        function handleBaseFootprintPick(event) {
+            if (!robotRoot || !treeData || !baseFootprintPickMode) return;
+            const intersections = getViewerIntersections(event);
+            const selection = resolveBestSurfaceSnap(intersections, event);
+            if (!selection) {
+                updateBaseFootprintPickUi('BASE FOOTPRINT 위치를 찾지 못했습니다. 평평한 면을 다시 클릭하세요.');
+                return;
+            }
+            const { hit, snap } = selection;
+            const component = selection.component || '선택한 부품';
+            const worldPoint = hit.object.localToWorld(snap.localCenter.clone());
+            const rosFrame = new THREE.Quaternion().setFromEuler(
+                new THREE.Euler(Math.PI / 2, 0, 0, 'XYZ')
+            );
+            const unitsPerMeter = Number(treeData._preview_units_per_meter) || 1000.0;
+            const rosWorldPoint = worldPoint.clone()
+                .applyQuaternion(rosFrame)
+                .divideScalar(unitsPerMeter);
+            saveState();
+            treeData._base_footprint_frame = {
+                component,
+                snap_mode: snap.snapMode || 'connected_planar_face_centroid',
+                center_local: snap.localCenter.toArray(),
+                world_xyz: rosWorldPoint.toArray(),
+                rpy: Array.isArray(treeData._base_footprint_frame?.rpy)
+                    ? treeData._base_footprint_frame.rpy.slice(0, 3)
+                    : [0, 0, Number(treeData._base_footprint_frame?.yaw || 0)],
+                yaw: Number(treeData._base_footprint_frame?.yaw || 0),
+            };
+            baseFootprintPickMode = false;
+            hideGroundSnapMarker();
+            showBaseFootprintFrameMarker();
+            render({ skipPreview: true });
+            updateGroundFaceUi();
+            updateBaseFootprintPickUi(
+                `BASE FOOTPRINT 위치 지정 완료: ${component} · ROS XYZ ${rosWorldPoint.toArray().map(value => (value * 1000).toFixed(1)).join(', ')} mm`
+            );
         }
 
         function handleGroundFacePick(event) {
@@ -5158,6 +7464,7 @@ HTML_CONTENT = """
                 target_axis: targetAxisName,
                 normal_flipped_to_keep_model_above: normalFlippedToKeepModelAbove,
                 world_origin: [0, 0, 0],
+                origin_offset_xyz: [0, 0, 0],
             };
             syncPreviewRootTransform();
             groundFacePickMode = false;
@@ -5175,6 +7482,7 @@ HTML_CONTENT = """
                 ? ` · 긴 모서리 → 월드 ${targetAxisName}`
                 : ' · 평면 내 회전 유지';
             const snapLabel = snapDisplayLabel(snap);
+            render({ skipPreview: true });
             updateGroundFaceUi(
                 `원점 지정 완료: ${component} ${snapLabel} [${centerText}] → 월드 XYZ 0,0,0${axisText}`
             );
@@ -5484,7 +7792,7 @@ HTML_CONTENT = """
                 jointPickTargetComponent ? [jointPickTargetComponent] : components
             );
             clearJointSnapCandidateState();
-            hideGroundSnapMarker();
+            hideJointSnapMarker();
             refreshJointPickStageViewer();
             updateJointOriginPickUi(
                 jointPickTargetComponent
@@ -5525,7 +7833,7 @@ HTML_CONTENT = """
         function cancelJointOriginPick(message = '조인트 위치 지정을 취소했습니다.') {
             jointOriginPickMode = false;
             jointOriginPickJoint = null;
-            hideGroundSnapMarker();
+            hideJointSnapMarker();
             endJointOriginPickScope();
             updateJointOriginPickUi(message);
         }
@@ -5537,9 +7845,11 @@ HTML_CONTENT = """
                 return;
             }
             groundFacePickMode = false;
+            baseFootprintPickMode = false;
             updateGroundFaceUi('바닥면 지정 대기');
             activeJointSnapMarkerInfo = null;
             hideGroundSnapMarker();
+            hideJointSnapMarker();
             // Joint mates must be picked from the imported assembly pose,
             // never from a temporary slider preview pose.
             restoreImportedAssemblyPose(false);
@@ -5638,11 +7948,11 @@ HTML_CONTENT = """
                 );
                 clearJointSnapCandidateState();
                 refreshJointPickStageViewer();
-                showGroundSnapMarker(
+                showJointSnapMarker(
                     worldPoint,
                     worldNormal,
-                    true,
-                    snap.circleRadius
+                    snap.circleRadius,
+                    true
                 );
                 updateJointOriginPickUi(
                     `1/2 부모 연결점 저장 완료: ${component} · 이제 2/2 자식 연결점을 선택하세요.`
@@ -5786,10 +8096,13 @@ HTML_CONTENT = """
             jointOriginPickMode = false;
             jointOriginPickJoint = null;
             endJointOriginPickScope();
-            activeJointSnapMarkerInfo = jointInfo;
+            // The Fusion-style marker is a picking aid only. Once both mating
+            // points are committed, leave the model clean instead of pinning
+            // the last marker to the preview rig.
+            activeJointSnapMarkerInfo = null;
+            hideJointSnapMarker();
             previewRigDirty = true;
             previewControlsDirty = true;
-            showGroundSnapMarker(worldPoint, worldNormal, true, snap.circleRadius);
             const pointText = jointInfo._preview_world_xyz
                 .map(value => Number(value).toFixed(4))
                 .join(', ');
@@ -5807,14 +8120,10 @@ HTML_CONTENT = """
 
         function flipSelectedJointAxis() {
             if (!selectedElement || selectedElement.type !== 'joint' || !selectedElement.jointObj) return;
-            saveState();
-            const jointInfo = selectedElement.jointObj.joint_info || {};
-            selectedElement.jointObj.joint_info = jointInfo;
-            const axis = jointInfo.axis || [0, 0, 1];
-            jointInfo.axis = axis.map(value => -Number(value || 0));
-            jointInfo._axis_source = 'user_flipped_3d_axis';
-            previewRigDirty = true;
-            render({ previewDelay: 40 });
+            const joint = selectedElement.jointObj;
+            const currentAxis = (joint.joint_info && joint.joint_info.axis) || [0, 0, 1];
+            const flippedAxis = currentAxis.map(value => -Number(value || 0));
+            applyJointAxisChange(joint, flippedAxis, 'user_flipped_3d_axis');
         }
 
         function viewerMeshPickResult(event) {
@@ -5862,6 +8171,8 @@ HTML_CONTENT = """
                 if (!event.ctrlKey && !event.metaKey) clearSelection();
                 return;
             }
+            baseFootprintFrameSelected = false;
+            if (baseFootprintFrameMarker) baseFootprintFrameMarker.visible = false;
             const { component, node } = picked;
             const additive = !!(event.ctrlKey || event.metaKey);
             if (!additive) viewerSelectedComponents.clear();
@@ -5884,6 +8195,8 @@ HTML_CONTENT = """
         function handleViewerMeshPick(event) {
             const picked = viewerMeshPickResult(event);
             if (!picked) return;
+            baseFootprintFrameSelected = false;
+            if (baseFootprintFrameMarker) baseFootprintFrameMarker.visible = false;
             const { component, node } = picked;
 
             if (viewerIsolatedComponent === component) {
@@ -6020,10 +8333,13 @@ HTML_CONTENT = """
         }
 
         function clearSelection() {
+            baseFootprintFrameSelected = false;
+            if (baseFootprintFrameMarker) baseFootprintFrameMarker.visible = false;
             viewerSelectedComponent = null;
             viewerSelectedComponents.clear();
             selectedElement = null;
             highlight3DComponents([]);
+            updateSelectedJointFrameVisibility();
             applyViewerIsolationVisibility();
             render({ skipPreview: true });
         }
@@ -6032,14 +8348,36 @@ HTML_CONTENT = """
         let draggedNode = null;
         let draggedNodeParentList = null;
         let draggedNodeIndex = -1;
+        let draggedPhysicalMaterialKey = null;
+        let draggedPhysicalMaterialSource = null;
         let currentDragOverElement = null;
         let patcherNodeCounter = 1;
         let patcherConnectionDrag = null;
         let patcherCableFrame = null;
+        let patcherSharpRepaintTimer = null;
         let patcherPanDrag = null;
         let patcherGroupingMode = false;
         let patcherGroupSelection = new Set();
+        let patcherControllerSelectionMode = false;
+        let patcherControllerJointSelection = new Set();
         let treeWireFrame = null;
+
+        const CONTROLLER_PALETTE = [
+            '#d95cff', '#28c7fa', '#ff9f43', '#44d17a', '#ff5d8f',
+            '#9b7cff', '#f2d34f', '#35d0ba', '#ff704d', '#70a5ff'
+        ];
+        const CONTROLLER_TYPES = [
+            ['joint_trajectory_controller/JointTrajectoryController', 'Joint Trajectory Controller', '시간에 따른 다관절 궤적을 실행합니다.', 'joint_trajectory_controller'],
+            ['position_controllers/JointGroupPositionController', 'Joint Group Position Controller', '여러 관절에 위치값을 바로 전달합니다.', 'joint_group_position_controller'],
+            ['velocity_controllers/JointGroupVelocityController', 'Joint Group Velocity Controller', '여러 관절에 속도값을 바로 전달합니다.', 'joint_group_velocity_controller'],
+            ['effort_controllers/JointGroupEffortController', 'Joint Group Effort Controller', '여러 관절에 effort 값을 바로 전달합니다.', 'joint_group_effort_controller'],
+            ['diff_drive_controller/DiffDriveController', 'Differential Drive Controller', '좌우 바퀴 속도를 계산하는 이동 로봇 컨트롤러입니다.', 'diff_drive_controller'],
+            ['forward_command_controller/ForwardCommandController', 'Forward Command Controller', '선택한 command interface에 값을 그대로 전달합니다.', 'forward_command_controller'],
+            ['position_controllers/GripperActionController', 'Position Gripper Action Controller', '단일 그리퍼 관절을 액션으로 제어합니다.', 'gripper_controller'],
+            ['effort_controllers/GripperActionController', 'Effort Gripper Action Controller', '단일 그리퍼 관절을 effort 액션으로 제어합니다.', 'effort_gripper_controller'],
+            ['pid_controller/PidController', 'PID Controller', '기준/상태값과 command interface 사이에 PID 제어를 적용합니다.', 'pid_controller'],
+            ['joint_state_broadcaster/JointStateBroadcaster', 'Joint State Broadcaster', '관절 상태를 발행하며 모터에는 명령하지 않습니다.', 'custom_joint_state_broadcaster'],
+        ];
 
         let historyStack = [];
         const MAX_HISTORY = 30;
@@ -6140,9 +8478,16 @@ HTML_CONTENT = """
         }
 
         document.addEventListener('keydown', function(e) {
-            if (e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'select') return;
+            if (
+                e.key !== 'Escape'
+                && (e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'select')
+            ) return;
             if (e.key === 'Escape') {
                 e.preventDefault();
+                hideJointSnapMarker();
+                activeJointSnapMarkerInfo = null;
+                baseFootprintFrameSelected = false;
+                if (baseFootprintFrameMarker) baseFootprintFrameMarker.visible = false;
                 if (jointOriginPickMode) {
                     cancelJointOriginPick();
                     return;
@@ -6151,6 +8496,14 @@ HTML_CONTENT = """
                     groundFacePickMode = false;
                     hideGroundSnapMarker();
                     updateGroundFaceUi('바닥면 지정을 취소했습니다.');
+                    return;
+                }
+                if (baseFootprintPickMode) {
+                    baseFootprintPickMode = false;
+                    hideGroundSnapMarker();
+                    updateGroundFaceUi();
+                    render({ skipPreview: true });
+                    updateBaseFootprintPickUi('BASE FOOTPRINT 위치 지정을 취소했습니다.');
                     return;
                 }
                 if (patcherConnectionDrag) {
@@ -6169,9 +8522,12 @@ HTML_CONTENT = """
             }
         });
 
-        function autoRename(node) {
-            if (node.name === "base_link") return;
-            if (node.name.match(/^link_\\d+$/)) return;
+       function autoRename(node) {
+            if (node === treeData) {
+                node.name = 'base_link';
+                return;
+            }
+           if (node.name.match(/^link_\\d+$/)) return;
             let maxLink = 0;
             const flat = getFlatLinks(treeData, null, -1);
             flat.forEach(item => {
@@ -6244,14 +8600,17 @@ HTML_CONTENT = """
             const linkMappings = [];
             const jointMappings = [];
             const previewRows = [];
-            let linkCount = 0;
-            let jointCount = 0;
+            let childLinkCount = 0;
+           let jointCount = 0;
 
             const addLink = (node, connected) => {
-                if (!node || visited.has(node)) return;
-                visited.add(node);
-                linkCount += 1;
-                const newName = `link_${linkCount}`;
+               if (!node || visited.has(node)) return;
+               visited.add(node);
+                const isBaseLink = node === treeData;
+                if (!isBaseLink) childLinkCount += 1;
+                const newName = isBaseLink
+                    ? 'base_link'
+                    : `link_${childLinkCount}`;
                 linkMappings.push({node, oldName: node.name, newName, connected});
                 previewRows.push({
                     kind: connected ? '링크' : '미연결 링크',
@@ -6380,16 +8739,136 @@ HTML_CONTENT = """
             proceedSave();
         }
 
-        function toggleWorldFix(checked) {
-            const setting = document.getElementById('fix-to-world');
-            if (setting) setting.checked = checked;
-            const label = document.getElementById('fix-to-world-label');
-            if (label && checked) {
-                label.classList.add('checked-state');
-            } else if (label) {
-                label.classList.remove('checked-state');
+        function rootJointMode() {
+            const value = document.getElementById('root-joint-mode')?.value;
+            if (['world', 'base_footprint', 'none'].includes(value)) return value;
+            return document.getElementById('fix-to-world')?.checked ? 'world' : 'none';
+        }
+
+        function setRootJointMode(mode) {
+            const normalized = ['world', 'base_footprint', 'none'].includes(mode)
+                ? mode
+                : 'none';
+            if (treeData) saveState();
+            const modeInput = document.getElementById('root-joint-mode');
+            const legacyWorldSetting = document.getElementById('fix-to-world');
+            if (modeInput) modeInput.value = normalized;
+            if (legacyWorldSetting) legacyWorldSetting.checked = normalized === 'world';
+            if (normalized !== 'base_footprint') {
+                baseFootprintPickMode = false;
+                baseFootprintPanelExpanded = false;
+                baseFootprintFrameSelected = false;
+                hideGroundSnapMarker();
             }
-            render({ skipPreview: true }); 
+            if (treeData) {
+                if (normalized === 'base_footprint' && !treeData._base_footprint_frame) {
+                    treeData._base_footprint_frame = {
+                        world_xyz: [0, 0, 0],
+                        rpy: [0, 0, 0],
+                        yaw: 0,
+                    };
+                }
+                treeData._editor_settings = {
+                    ...(treeData._editor_settings || {}),
+                    fix_to_world: normalized === 'world',
+                    root_joint_mode: normalized,
+                };
+                render({ skipPreview: true });
+            }
+            showBaseFootprintFrameMarker();
+        }
+
+        function startBaseFootprintPlacement(event) {
+            event?.preventDefault();
+            event?.stopPropagation();
+            if (rootJointMode() !== 'base_footprint') return;
+            if (jointOriginPickMode) cancelJointOriginPick();
+            groundFacePickMode = false;
+            baseFootprintPickMode = true;
+            baseFootprintFrameSelected = true;
+            baseFootprintPanelExpanded = true;
+            hideGroundSnapMarker();
+            updateGroundFaceUi();
+            render({ skipPreview: true });
+            updateBaseFootprintPickUi(
+                'BASE FOOTPRINT 전용 위치 지정 중 · 모델의 평평한 지면 기준점을 선택하세요. 기준 좌표 설정은 변경되지 않습니다.'
+            );
+        }
+
+        function cancelBaseFootprintPlacement(event) {
+            event?.preventDefault();
+            event?.stopPropagation();
+            baseFootprintPickMode = false;
+            baseFootprintFrameSelected = false;
+            hideGroundSnapMarker();
+            if (baseFootprintFrameMarker) baseFootprintFrameMarker.visible = false;
+            updateGroundFaceUi();
+            render({ skipPreview: true });
+            updateBaseFootprintPickUi('BASE FOOTPRINT 위치 지정을 취소했습니다.');
+        }
+
+        function setBaseFootprintCoordinate(axis, rawMillimeters) {
+            const frame = treeData?._base_footprint_frame;
+            const axisIndex = { x: 0, y: 1, z: 2 }[String(axis).toLowerCase()];
+            const millimeters = Number(rawMillimeters);
+            if (!frame || axisIndex === undefined || !Number.isFinite(millimeters)) {
+                render({ skipPreview: true });
+                return;
+            }
+            const worldXyz = Array.isArray(frame.world_xyz) && frame.world_xyz.length === 3
+                ? frame.world_xyz.map(value => Number(value) || 0)
+                : [0, 0, 0];
+            saveState();
+            worldXyz[axisIndex] = millimeters / 1000;
+            frame.world_xyz = worldXyz;
+            showBaseFootprintFrameMarker();
+            render({ skipPreview: true });
+            updateBaseFootprintPickUi(
+                `BASE FOOTPRINT 위치 보정: X ${(worldXyz[0] * 1000).toFixed(1)}, Y ${(worldXyz[1] * 1000).toFixed(1)}, Z ${(worldXyz[2] * 1000).toFixed(1)} mm`
+            );
+        }
+
+        function setBaseFootprintOrientation(axis, rawDegrees) {
+            const frame = treeData?._base_footprint_frame;
+            const axisIndex = { r: 0, p: 1, y: 2 }[String(axis).toLowerCase()];
+            const degrees = Number(rawDegrees);
+            if (!frame || axisIndex === undefined || !Number.isFinite(degrees)) {
+                render({ skipPreview: true });
+                return;
+            }
+            const rpy = Array.isArray(frame.rpy) && frame.rpy.length === 3
+                ? frame.rpy.map(value => Number(value) || 0)
+                : [0, 0, Number(frame.yaw) || 0];
+            saveState();
+            rpy[axisIndex] = THREE.MathUtils.degToRad(degrees);
+            frame.rpy = rpy;
+            frame.yaw = rpy[2];
+            frame.orientation_manual = true;
+            baseFootprintFrameSelected = true;
+            showBaseFootprintFrameMarker();
+            render({ skipPreview: true });
+            updateBaseFootprintPickUi(
+                `BASE FOOTPRINT 방향: R ${THREE.MathUtils.radToDeg(rpy[0]).toFixed(1)}°, P ${THREE.MathUtils.radToDeg(rpy[1]).toFixed(1)}°, Y ${THREE.MathUtils.radToDeg(rpy[2]).toFixed(1)}°`
+            );
+        }
+
+        function selectBaseFootprintFrame(event) {
+            event?.preventDefault();
+            event?.stopPropagation();
+            if (rootJointMode() !== 'base_footprint') return;
+            if (jointOriginPickMode) cancelJointOriginPick();
+            viewerSelectedComponent = null;
+            viewerSelectedComponents.clear();
+            selectedElement = null;
+            highlight3DComponents([]);
+            baseFootprintFrameSelected = true;
+            render({ skipPreview: true });
+            showBaseFootprintFrameMarker();
+            updateBaseFootprintPickUi('BASE FOOTPRINT 선택됨 · 3D의 X(빨강), Y(초록), Z(파랑) 축과 아래 R·P·Y 방향값을 확인하세요.');
+        }
+
+        function toggleWorldFix(checked) {
+            setRootJointMode(checked ? 'world' : 'none');
         }
 
         function render(options = {}) {
@@ -6753,12 +9232,30 @@ HTML_CONTENT = """
             const stage = document.getElementById('patcher-canvas');
             if (!viewport || !stage || !treeData) return;
             const view = getPatcherView();
-            stage.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`;
+            const pixelRatio = Math.max(1, Number(window.devicePixelRatio) || 1);
+            const renderX = Math.round(view.x * pixelRatio) / pixelRatio;
+            const renderY = Math.round(view.y * pixelRatio) / pixelRatio;
+            const renderZoom = Math.round(view.zoom * 1000) / 1000;
+            stage.style.transform = `translate(${renderX}px, ${renderY}px) scale(${renderZoom})`;
             viewport.style.backgroundSize = `${28 * view.zoom}px ${28 * view.zoom}px`;
-            viewport.style.setProperty('--patcher-grid-x', `${view.x % (28 * view.zoom)}px`);
-            viewport.style.setProperty('--patcher-grid-y', `${view.y % (28 * view.zoom)}px`);
+            viewport.style.setProperty('--patcher-grid-x', `${renderX % (28 * view.zoom)}px`);
+            viewport.style.setProperty('--patcher-grid-y', `${renderY % (28 * view.zoom)}px`);
             const readout = document.getElementById('patcher-zoom-readout');
             if (readout) readout.textContent = `${Math.round(view.zoom * 100)}%`;
+        }
+
+        function schedulePatcherSharpRepaint() {
+            if (patcherSharpRepaintTimer) clearTimeout(patcherSharpRepaintTimer);
+            patcherSharpRepaintTimer = setTimeout(() => {
+                patcherSharpRepaintTimer = null;
+                const stage = document.getElementById('patcher-canvas');
+                if (!stage) return;
+                const finalTransform = stage.style.transform;
+                stage.style.transform = 'none';
+                void stage.offsetHeight;
+                stage.style.transform = finalTransform;
+                schedulePatcherCableRender();
+            }, 90);
         }
 
         function zoomPatcher(factor, clientX = null, clientY = null) {
@@ -6767,7 +9264,8 @@ HTML_CONTENT = """
             const rect = viewport.getBoundingClientRect();
             const view = getPatcherView();
             const oldZoom = view.zoom;
-            const newZoom = Math.max(0.12, Math.min(1.8, oldZoom * factor));
+            const rawZoom = Math.max(0.12, Math.min(1.8, oldZoom * factor));
+            const newZoom = Math.max(0.12, Math.min(1.8, Math.round(rawZoom * 20) / 20));
             const anchorX = clientX === null ? rect.width / 2 : clientX - rect.left;
             const anchorY = clientY === null ? rect.height / 2 : clientY - rect.top;
             const worldX = (anchorX - view.x) / oldZoom;
@@ -6776,6 +9274,7 @@ HTML_CONTENT = """
             view.x = anchorX - worldX * newZoom;
             view.y = anchorY - worldY * newZoom;
             applyPatcherView();
+            schedulePatcherSharpRepaint();
             scheduleWorkspaceAutosave();
         }
 
@@ -6785,6 +9284,9 @@ HTML_CONTENT = """
             const entries = patcherEntries();
             const positions = entries.map(item => getPatcherPosition(item.node, entries));
             positions.push({ x: 42, y: 54 });
+            if (rootJointMode() === 'base_footprint') {
+                positions.push({ x: 42, y: 245 });
+            }
             const minX = Math.min(...positions.map(position => position.x)) - 45;
             const minY = Math.min(...positions.map(position => position.y)) - 45;
             const maxX = Math.max(...positions.map(position => position.x)) + 230;
@@ -6800,6 +9302,7 @@ HTML_CONTENT = """
                 y: (rect.height - (maxY - minY) * zoom) / 2 - minY * zoom,
             };
             applyPatcherView();
+            schedulePatcherSharpRepaint();
             scheduleWorkspaceAutosave();
         }
 
@@ -6810,7 +9313,9 @@ HTML_CONTENT = """
             };
             viewport.onpointerdown = event => {
                 if (event.button !== 0) return;
-                if (event.target.closest('.patcher-node, .patcher-joint-label, .patcher-cable')) return;
+                if (event.target.closest(
+                    '.patcher-node, .patcher-joint-label, .patcher-cable, .patcher-world-fix, .patcher-footprint-settings, .patcher-controller-label, .patcher-controller-frame, .patcher-controller-border-hit'
+                )) return;
                 event.preventDefault();
                 const view = getPatcherView();
                 patcherPanDrag = {
@@ -6818,20 +9323,27 @@ HTML_CONTENT = """
                     startY: event.clientY,
                     viewX: view.x,
                     viewY: view.y,
+                    moved: false,
                 };
                 viewport.classList.add('panning');
                 const move = moveEvent => {
                     if (!patcherPanDrag) return;
+                    if (
+                        Math.abs(moveEvent.clientX - patcherPanDrag.startX) > 4
+                        || Math.abs(moveEvent.clientY - patcherPanDrag.startY) > 4
+                    ) patcherPanDrag.moved = true;
                     view.x = patcherPanDrag.viewX + moveEvent.clientX - patcherPanDrag.startX;
                     view.y = patcherPanDrag.viewY + moveEvent.clientY - patcherPanDrag.startY;
                     applyPatcherView();
                 };
                 const end = () => {
+                    const wasBackgroundClick = patcherPanDrag && !patcherPanDrag.moved;
                     patcherPanDrag = null;
                     viewport.classList.remove('panning');
                     document.removeEventListener('pointermove', move);
                     document.removeEventListener('pointerup', end);
                     scheduleWorkspaceAutosave();
+                    if (wasBackgroundClick) clearSelection();
                 };
                 document.addEventListener('pointermove', move);
                 document.addEventListener('pointerup', end);
@@ -6878,23 +9390,24 @@ HTML_CONTENT = """
 
         function validatePatcherGraph(updateUi = true) {
             const entries = patcherEntries();
-            const disconnected = entries.slice(1).filter(
+            const activeEntries = entries.filter(item => !isLinkDisabled(item.node));
+            const disconnected = activeEntries.slice(1).filter(
                 item => !isPatcherJointActive(item.jointObj)
             );
-            const activeNames = entries
+            const activeNames = activeEntries
                 .filter(item => isPatcherJointActive(item.jointObj))
                 .map(item => item.jointObj.joint_name);
             const duplicates = activeNames.filter(
                 (name, index) => activeNames.indexOf(name) !== index
             );
-            const incompleteLimits = entries.filter(item => {
+            const incompleteLimits = activeEntries.filter(item => {
                 if (!isPatcherJointActive(item.jointObj)) return false;
                 if ((item.jointObj.joint_type || '') !== 'revolute') return false;
                 const jointInfo = item.jointObj.joint_info || {};
                 return (jointInfo._manual_limit_lower_set === true)
                     !== (jointInfo._manual_limit_upper_set === true);
             });
-            const invalidLimits = entries.filter(item => {
+            const invalidLimits = activeEntries.filter(item => {
                 if (!isPatcherJointActive(item.jointObj)) return false;
                 if (!['revolute', 'prismatic'].includes(item.jointObj.joint_type || '')) return false;
                 const jointInfo = item.jointObj.joint_info || {};
@@ -6905,33 +9418,40 @@ HTML_CONTENT = """
                     || lower >= upper;
             });
             const worldRequired = !TREE_EDITOR_MODE
-                && !!document.getElementById('fix-to-world')?.checked;
+                && rootJointMode() !== 'none';
             const worldConnected = !worldRequired || !!treeData._patcher_world_connected;
+            const footprintPlacementReady = true;
+            const disabledCount = entries.filter(item => isLinkDisabled(item.node)).length;
             const result = {
                 valid: disconnected.length === 0
                     && duplicates.length === 0
                     && incompleteLimits.length === 0
                     && invalidLimits.length === 0
-                    && worldConnected,
+                    && worldConnected
+                    && footprintPlacementReady,
                 disconnected,
                 duplicates: [...new Set(duplicates)],
                 incompleteLimits,
                 invalidLimits,
                 worldConnected,
+                footprintPlacementReady,
                 activeJointCount: activeNames.length,
-                linkCount: entries.length,
+                linkCount: activeEntries.length,
+                disabledCount,
             };
             if (updateUi) {
                 const status = document.getElementById('patcher-validation');
                 if (status) {
                     status.classList.toggle('ok', result.valid);
+                    const disabledNotice = disabledCount > 0 ? ` (비활성 ${disabledCount}개)` : '';
                     status.textContent = result.valid
-                        ? `배선 완료 · 링크 ${result.linkCount}개 / 조인트 ${result.activeJointCount}개`
-                        : `${worldConnected ? '' : 'WORLD 루트 미지정 · '}미연결 링크 ${disconnected.length}개${result.duplicates.length ? ` · 중복 조인트 이름 ${result.duplicates.length}개` : ''}${incompleteLimits.length ? ` · 리밋 미완료 ${incompleteLimits.length}개` : ''}${invalidLimits.length ? ` · lower ≥ upper 오류 ${invalidLimits.length}개` : ''}`;
+                        ? `배선 완료 · 링크 ${result.linkCount}개 / 조인트 ${result.activeJointCount}개${disabledNotice}`
+                        : `${worldConnected ? '' : '루트 프레임 미연결 · '}미연결 링크 ${disconnected.length}개${result.duplicates.length ? ` · 중복 조인트 이름 ${result.duplicates.length}개` : ''}${incompleteLimits.length ? ` · 리밋 미완료 ${result.incompleteLimits.length}개` : ''}${invalidLimits.length ? ` · lower ≥ upper 오류 ${invalidLimits.length}개` : ''}${disabledNotice}`;
                 }
                 const summary = document.getElementById('patcher-summary');
                 if (summary) {
-                    summary.textContent = `링크 ${result.linkCount} · 배선 ${result.activeJointCount} · 미연결 ${disconnected.length}`;
+                    const disabledNotice = disabledCount > 0 ? ` · 비활성 ${disabledCount}` : '';
+                    summary.textContent = `링크 ${result.linkCount} · 배선 ${result.activeJointCount} · 미연결 ${disconnected.length}${disabledNotice}`;
                 }
             }
             return result;
@@ -6944,7 +9464,8 @@ HTML_CONTENT = """
             const shell = document.createElement('div');
             shell.className = 'patcher-shell';
             shell.innerHTML = `
-                <div class="patcher-toolbar">
+                <div id="patcher-controls" class="patcher-controls">
+                  <div class="patcher-toolbar">
                     <button id="patcher-auto-layout-button" type="button"
                             onclick="autoLayoutPatcher(true)">▦ 자동 정렬</button>
                     <button id="patcher-name-order-button" type="button"
@@ -6958,10 +9479,27 @@ HTML_CONTENT = """
                     <button id="patcher-ungroup-selected" type="button"
                             onclick="ungroupSelectedPatcherLink()" disabled>그룹 해제</button>
                     <button type="button" onclick="disconnectSelectedJoint()">✂ 선택 배선 끊기</button>
+                    <button id="patcher-controller-mode" type="button"
+                            onclick="togglePatcherControllerMode()">▢ 컨트롤러 지정</button>
+                    <button id="patcher-material-shelf-toggle" class="patcher-material-shelf-toggle" type="button"
+                            onclick="togglePatcherMaterialShelf()">▾ 재질 라이브러리</button>
                     <span id="patcher-summary" class="patcher-summary"></span>
+                  </div>
+                  <section id="patcher-material-shelf" class="patcher-material-shelf" hidden>
+                    <div class="patcher-material-shelf-head">
+                        <strong>재질 빠른 적용</strong>
+                        <input id="patcher-material-shelf-search" class="patcher-material-shelf-search"
+                               type="search" placeholder="재질 검색 · ABS, PLA, 알루미늄, 밀도..."
+                               aria-label="빠른 적용 재질 검색"
+                               oninput="filterPatcherMaterialShelf(this.value)">
+                        <span class="patcher-material-shelf-hint">카드를 링크에 놓으면 모든 부품에 적용</span>
+                    </div>
+                    <div id="patcher-material-shelf-cards" class="patcher-material-shelf-cards"></div>
+                  </section>
                 </div>
                 <div id="patcher-validation" class="patcher-validation"></div>
             `;
+            syncPatcherMaterialShelf(shell);
             const canvas = document.createElement('div');
             canvas.id = 'patcher-canvas';
             canvas.className = 'patcher-canvas';
@@ -6972,42 +9510,119 @@ HTML_CONTENT = """
             svg.classList.add('patcher-cables');
             canvas.appendChild(svg);
 
-            const worldFixEnabled = !!document.getElementById('fix-to-world')?.checked;
+            const selectedRootJointMode = rootJointMode();
+            const worldFixEnabled = selectedRootJointMode !== 'none';
             const worldFixControl = document.createElement('label');
-            worldFixControl.id = 'fix-to-world-label';
+            worldFixControl.id = 'root-joint-control';
             worldFixControl.className = `patcher-world-fix${worldFixEnabled ? ' checked-state' : ''}`;
-            worldFixControl.title = '로봇 팔처럼 바닥에 고정된 모델일 경우 체크하세요. 모바일 로봇이면 해제합니다.';
+            worldFixControl.title = '루트 링크를 WORLD 또는 BASE FOOTPRINT 기준 프레임에 연결합니다.';
+            worldFixControl.onpointerdown = event => event.stopPropagation();
+            worldFixControl.onclick = event => event.stopPropagation();
             worldFixControl.innerHTML = `
-                <input type="checkbox" ${worldFixEnabled ? 'checked' : ''}
-                       onchange="toggleWorldFix(this.checked)">
-                world_joint 생성
+                <select id="root-joint-mode-select" onchange="setRootJointMode(this.value)">
+                    <option value="world" ${selectedRootJointMode === 'world' ? 'selected' : ''}>world_joint 생성</option>
+                    <option value="base_footprint" ${selectedRootJointMode === 'base_footprint' ? 'selected' : ''}>base_footprint_joint 생성</option>
+                    <option value="none" ${selectedRootJointMode === 'none' ? 'selected' : ''}>루트 조인트 없음</option>
+                </select>
             `;
             canvas.appendChild(worldFixControl);
 
             const world = document.createElement('div');
             world.className = 'patcher-node world-node';
+            if (selectedRootJointMode === 'base_footprint') {
+                world.classList.add('footprint-with-settings');
+                if (baseFootprintFrameSelected) world.classList.add('base-footprint-selected');
+            }
             if (!treeData._patcher_world_connected) world.classList.add('disconnected-world');
             if (!worldFixEnabled) world.classList.add('world-disabled');
             world.dataset.patcherId = '__world__';
             world.style.left = '42px';
             world.style.top = '54px';
-            world.innerHTML = `🌍 WORLD<div style="font-size:9px;color:#9bdca4;margin-top:5px;">${
+            world.onclick = event => {
+                if (event.target.closest('.patcher-port')) return;
+                if (selectedRootJointMode === 'base_footprint') selectBaseFootprintFrame(event);
+            };
+            const rootFrameTitle = selectedRootJointMode === 'world'
+                ? '🌍 WORLD'
+                : selectedRootJointMode === 'base_footprint'
+                    ? '⬡ BASE FOOTPRINT'
+                    : '◇ FREE ROOT';
+            world.innerHTML = `${rootFrameTitle}<div style="font-size:9px;color:#9bdca4;margin-top:5px;">${
                 worldFixEnabled
-                    ? (treeData._patcher_world_connected ? 'world_joint · fixed' : '루트를 직접 연결하세요')
-                    : '루트 선택 가능 · 바닥 고정 꺼짐'
+                    ? (treeData._patcher_world_connected
+                        ? (selectedRootJointMode === 'base_footprint'
+                            ? 'base_footprint_joint · 좌표 입력'
+                            : 'world_joint · fixed')
+                        : '루트를 직접 연결하세요')
+                    : '기준 프레임 연결 없음'
             }</div>`;
             const worldOutput = document.createElement('button');
             worldOutput.type = 'button';
             worldOutput.className = 'patcher-port output';
             worldOutput.setAttribute('aria-label', 'WORLD 출력 포트');
             worldOutput.title = treeData._patcher_world_connected
-                ? '더블클릭하면 WORLD 배선을 끊습니다'
-                : 'WORLD에서 루트 링크 연결을 시작합니다';
+                ? '더블클릭하면 루트 프레임 배선을 끊습니다'
+                : '기준 프레임에서 루트 링크 연결을 시작합니다';
+            worldOutput.disabled = !worldFixEnabled;
             worldOutput.onpointerdown = event => beginPatcherConnection(event, '__world__');
             worldOutput.onclick = event => armPatcherConnectionByClick(event, '__world__');
             worldOutput.ondblclick = event => disconnectPatcherPort(event, treeData, null);
             world.appendChild(worldOutput);
             canvas.appendChild(world);
+
+            if (selectedRootJointMode === 'base_footprint') {
+                const footprintFrame = treeData._base_footprint_frame || {
+                    world_xyz: [0, 0, 0], rpy: [0, 0, 0], yaw: 0,
+                };
+                const footprintMillimeters = Array.isArray(footprintFrame.world_xyz)
+                    ? footprintFrame.world_xyz.map(value => Number(value || 0) * 1000)
+                    : [0, 0, 0];
+                const footprintRpy = Array.isArray(footprintFrame.rpy) && footprintFrame.rpy.length === 3
+                    ? footprintFrame.rpy.map(value => Number(value) || 0)
+                    : [0, 0, Number(footprintFrame.yaw) || 0];
+                const footprintDegrees = footprintRpy.map(value => THREE.MathUtils.radToDeg(value));
+                const settings = document.createElement('section');
+                settings.id = 'base-footprint-settings';
+                settings.className = 'patcher-footprint-settings';
+                if (baseFootprintFrameSelected) settings.classList.add('base-footprint-selected');
+                settings.onpointerdown = event => {
+                    event.stopPropagation();
+                    if (!baseFootprintFrameSelected) {
+                        baseFootprintFrameSelected = true;
+                        world.classList.add('base-footprint-selected');
+                        settings.classList.add('base-footprint-selected');
+                        showBaseFootprintFrameMarker();
+                    }
+                };
+                settings.onclick = event => event.stopPropagation();
+                settings.innerHTML = `
+                    <div class="patcher-footprint-settings-heading">
+                        <span>BASE FOOTPRINT 좌표</span>
+                        <span>ROS XYZ · mm</span>
+                    </div>
+                    <div class="patcher-footprint-offset-fields">
+                        ${['x', 'y', 'z'].map((axis, index) => `
+                            <label>${axis.toUpperCase()}
+                                <input type="number" step="1" value="${Number(footprintMillimeters[index].toFixed(3))}"
+                                       onchange="setBaseFootprintCoordinate('${axis}', this.value)">
+                            </label>
+                        `).join('')}
+                    </div>
+                    <div class="patcher-footprint-settings-heading" style="margin-top:9px;">
+                        <span>BASE FOOTPRINT 방향</span>
+                        <span>ROS RPY · °</span>
+                    </div>
+                    <div class="patcher-footprint-offset-fields">
+                        ${['r', 'p', 'y'].map((axis, index) => `
+                            <label>${axis.toUpperCase()}
+                                <input type="number" step="1" value="${Number(footprintDegrees[index].toFixed(3))}"
+                                       onchange="setBaseFootprintOrientation('${axis}', this.value)">
+                            </label>
+                        `).join('')}
+                    </div>
+                `;
+                canvas.appendChild(settings);
+            }
 
             entries.forEach(item => {
                 const nodeElement = createPatcherNode(item, entries, connected);
@@ -7027,6 +9642,8 @@ HTML_CONTENT = """
                 canvas.appendChild(note);
             }
             viewport.appendChild(canvas);
+            const validationStatus = shell.querySelector('#patcher-validation');
+            if (validationStatus) viewport.appendChild(validationStatus);
             shell.appendChild(viewport);
             container.appendChild(shell);
             setupPatcherViewport(viewport);
@@ -7048,7 +9665,11 @@ HTML_CONTENT = """
             element.style.left = `${position.x}px`;
             element.style.top = `${position.y}px`;
             element.style.minHeight = `${patcherNodeVisualHeight(node)}px`;
+            const disabled = isLinkDisabled(node);
             if (!connected.get(node)) element.classList.add('disconnected');
+            if (disabled) {
+                element.classList.add('disabled');
+            }
             if (patcherGroupSelection.has(node)) {
                 element.classList.add('group-selected');
                 if (getPatcherGroupTarget() === node) element.classList.add('group-target');
@@ -7062,6 +9683,7 @@ HTML_CONTENT = """
             box.setAttribute('aria-label', `${node.name} 링크 노드`);
             box.tabIndex = 0;
             if (node.is_finalized) box.classList.add('finalized');
+            if (disabled) box.classList.add('disabled');
             if (selectedElement && selectedElement.type === 'link' && selectedElement.node === node) {
                 box.classList.add('selected');
             }
@@ -7083,6 +9705,19 @@ HTML_CONTENT = """
             renameButton.title = '링크 이름 수정';
             renameButton.onpointerdown = event => event.stopPropagation();
             renameButton.onclick = event => startPatcherLinkRename(event, node, title);
+            const toggleActiveButton = document.createElement('button');
+            toggleActiveButton.type = 'button';
+            toggleActiveButton.className = 'patcher-node-toggle';
+            updateToggleActiveButtonUi(toggleActiveButton, disabled, node.name);
+            if (node === treeData) {
+                toggleActiveButton.style.display = 'none';
+            }
+            toggleActiveButton.onpointerdown = event => event.stopPropagation();
+            toggleActiveButton.onclick = event => {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleLinkActive(node);
+            };
             const ungroupButton = document.createElement('button');
             ungroupButton.type = 'button';
             ungroupButton.className = 'patcher-node-ungroup';
@@ -7097,18 +9732,23 @@ HTML_CONTENT = """
             };
             const state = document.createElement('span');
             state.className = 'patcher-node-state';
-            state.textContent = node.is_finalized
-                ? 'LINK'
-                : (
-                    item.node === treeData && treeData._patcher_world_connected
-                        ? 'ROOT'
-                        : (
-                            isPatcherJointActive(jointObj)
-                                ? (jointObj.joint_type || 'fixed')
-                                : (isPatcherGroupCandidate(jointObj) ? '묶음 후보' : '미연결')
-                        )
-                );
-            header.append(colorDot, title, renameButton, ungroupButton, state);
+            if (disabled) {
+                state.textContent = '비활성';
+                state.classList.add('disabled-state');
+            } else {
+                state.textContent = node.is_finalized
+                    ? 'LINK'
+                    : (
+                        item.node === treeData && treeData._patcher_world_connected
+                            ? 'ROOT'
+                            : (
+                                isPatcherJointActive(jointObj)
+                                    ? (jointObj.joint_type || 'fixed')
+                                    : (isPatcherGroupCandidate(jointObj) ? '묶음 후보' : '미연결')
+                            )
+                    );
+            }
+            header.append(colorDot, title, renameButton, toggleActiveButton, ungroupButton, state);
             box.appendChild(header);
 
             const partsDiv = document.createElement('div');
@@ -7140,6 +9780,7 @@ HTML_CONTENT = """
                 box.click();
             };
             attachPatcherNodeMove(box, node, element);
+            attachPhysicalMaterialDropEvents(element, node);
             element.appendChild(box);
 
             const input = document.createElement('button');
@@ -7229,6 +9870,378 @@ HTML_CONTENT = """
                 ungroupButton.disabled = !selectedNode
                     || (selectedNode.components || []).length < 2;
             }
+            updatePatcherControllerUi();
+        }
+
+        function robotControllers() {
+            if (!treeData) return [];
+            if (!Array.isArray(treeData._controllers)) treeData._controllers = [];
+            treeData._controllers.forEach((controller, index) => {
+                if (!controller.color) controller.color = CONTROLLER_PALETTE[index % CONTROLLER_PALETTE.length];
+                if (!controller.type) controller.type = CONTROLLER_TYPES[0][0];
+                if (!controller.settings || typeof controller.settings !== 'object') controller.settings = {};
+            });
+            const usedNames = new Set(treeData._controllers
+                .map(controller => String(controller.name || ''))
+                .filter(name => name && !/^controller_\d+$/.test(name)));
+            treeData._controllers.forEach(controller => {
+                if (!/^controller_\d+$/.test(String(controller.name || ''))) return;
+                const option = CONTROLLER_TYPES.find(candidate => candidate[0] === controller.type) || CONTROLLER_TYPES[0];
+                const baseName = option[3];
+                let normalized = baseName;
+                let suffix = 2;
+                while (usedNames.has(normalized)) normalized = `${baseName}_${suffix++}`;
+                controller.name = normalized;
+                usedNames.add(normalized);
+            });
+            return treeData._controllers;
+        }
+
+        function controllerColorRgba(hex, alpha) {
+            const value = String(hex || '').replace('#', '');
+            if (!/^[0-9a-fA-F]{6}$/.test(value)) return `rgba(217,92,255,${alpha})`;
+            const number = parseInt(value, 16);
+            return `rgba(${(number >> 16) & 255},${(number >> 8) & 255},${number & 255},${alpha})`;
+        }
+
+        function nextControllerColor() {
+            const used = new Set(robotControllers().map(controller => String(controller.color || '').toLowerCase()));
+            return CONTROLLER_PALETTE.find(color => !used.has(color.toLowerCase()))
+                || CONTROLLER_PALETTE[robotControllers().length % CONTROLLER_PALETTE.length];
+        }
+
+        function updatePatcherControllerUi() {
+            const button = document.getElementById('patcher-controller-mode');
+            if (!button) return;
+            const count = patcherControllerJointSelection.size;
+            button.textContent = patcherControllerSelectionMode
+                ? (count > 0 ? `✓ 컨트롤러 생성 (${count})` : '✕ 컨트롤러 지정 취소')
+                : '▢ 컨트롤러 지정';
+            button.style.borderColor = patcherControllerSelectionMode ? '#d95cff' : '';
+            button.style.color = patcherControllerSelectionMode ? '#ffd8ff' : '';
+        }
+
+        function nextControllerName() {
+            const used = new Set(robotControllers().map(controller => String(controller.name || '')));
+            let index = 1;
+            while (used.has(`controller_${index}`)) index += 1;
+            return `controller_${index}`;
+        }
+
+        function controllerNameForType(type, currentController = null) {
+            const option = CONTROLLER_TYPES.find(candidate => candidate[0] === type) || CONTROLLER_TYPES[0];
+            const baseName = option[3];
+            const used = new Set(robotControllers()
+                .filter(controller => controller !== currentController)
+                .map(controller => String(controller.name || '')));
+            if (!used.has(baseName)) return baseName;
+            let suffix = 2;
+            while (used.has(`${baseName}_${suffix}`)) suffix += 1;
+            return `${baseName}_${suffix}`;
+        }
+
+        function togglePatcherControllerMode() {
+            if (patcherControllerSelectionMode && patcherControllerJointSelection.size > 0) {
+                createControllerFromPatcherSelection();
+                return;
+            }
+            patcherControllerSelectionMode = !patcherControllerSelectionMode;
+            patcherControllerJointSelection.clear();
+            if (patcherControllerSelectionMode) {
+                patcherGroupingMode = false;
+                patcherGroupSelection.clear();
+            }
+            render({ skipPreview: true });
+            const status = document.getElementById('patcher-validation');
+            if (status && patcherControllerSelectionMode) {
+                status.textContent = '가동 조인트 이름 라벨을 선택한 뒤 컨트롤러 생성 버튼을 누르세요.';
+            }
+        }
+
+        function toggleControllerJointSelection(jointObj) {
+            if (!jointObj || jointObj.joint_type === 'fixed') {
+                const status = document.getElementById('patcher-validation');
+                if (status) status.textContent = 'fixed 조인트는 동작 컨트롤러에 넣을 수 없습니다.';
+                return;
+            }
+            if (patcherControllerJointSelection.has(jointObj)) {
+                patcherControllerJointSelection.delete(jointObj);
+            } else {
+                patcherControllerJointSelection.add(jointObj);
+            }
+            render({ skipPreview: true });
+        }
+
+        function createControllerFromPatcherSelection() {
+            const jointNames = [...patcherControllerJointSelection]
+                .filter(joint => joint && joint.joint_type !== 'fixed')
+                .map(joint => joint.joint_name);
+            if (!jointNames.length) return;
+            saveState();
+            const selectedNames = new Set(jointNames);
+            const controllers = robotControllers();
+            controllers.forEach(controller => {
+                controller.joints = (controller.joints || []).filter(name => !selectedNames.has(name));
+            });
+            treeData._controllers = controllers.filter(controller => (controller.joints || []).length > 0);
+            const controller = {
+                id: `controller_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                name: controllerNameForType('joint_trajectory_controller/JointTrajectoryController'),
+                type: 'joint_trajectory_controller/JointTrajectoryController',
+                color: nextControllerColor(),
+                settings: {},
+                joints: jointNames,
+            };
+            treeData._controllers.push(controller);
+            patcherControllerSelectionMode = false;
+            patcherControllerJointSelection.clear();
+            selectedElement = { type: 'controller', controller };
+            render({ skipPreview: true });
+        }
+
+        function selectRobotController(event, controller) {
+            event?.preventDefault();
+            event?.stopPropagation();
+            patcherControllerSelectionMode = false;
+            patcherControllerJointSelection.clear();
+            baseFootprintFrameSelected = false;
+            if (baseFootprintFrameMarker) baseFootprintFrameMarker.visible = false;
+            viewerSelectedComponent = null;
+            viewerSelectedComponents.clear();
+            selectedElement = { type: 'controller', controller };
+            const jointNames = new Set(controller?.joints || []);
+            const components = [];
+            patcherEntries().forEach(entry => {
+                if (entry.jointObj && jointNames.has(entry.jointObj.joint_name) && entry.node && Array.isArray(entry.node.components)) {
+                    components.push(...entry.node.components);
+                }
+            });
+            if (components.length > 0) {
+                highlight3DComponents(components);
+            } else {
+                applyLinkGroupColors();
+            }
+            updateSelectedJointFrameVisibility();
+            render({ skipPreview: true });
+        }
+
+        function updateSelectedControllerName(rawName) {
+            const controller = selectedElement?.controller;
+            if (!controller) return;
+            const normalized = String(rawName || '').trim().replace(/[^A-Za-z0-9_]/g, '_');
+            if (!normalized) return render({ skipPreview: true });
+            const duplicate = robotControllers().some(
+                candidate => candidate !== controller && candidate.name === normalized
+            );
+            if (duplicate) {
+                alert('같은 컨트롤러 이름이 이미 있습니다.');
+                return render({ skipPreview: true });
+            }
+            saveState();
+            controller.name = normalized;
+            render({ skipPreview: true });
+        }
+
+        function controllerRequiredCommandInterface(controller) {
+            const type = controller?.type || CONTROLLER_TYPES[0][0];
+            if (type.includes('Velocity') || type.includes('diff_drive')) return 'velocity';
+            if (type.includes('Effort')) return 'effort';
+            if (type.includes('JointStateBroadcaster')) return null;
+            if (type.includes('ForwardCommand') || type.includes('PidController')) {
+                return controller.settings?.command_interface || 'position';
+            }
+            return 'position';
+        }
+
+        function applyControllerInterfaceToJoints(controller) {
+            const commandInterface = controllerRequiredCommandInterface(controller);
+            if (!commandInterface) return;
+            const names = new Set(controller.joints || []);
+            patcherEntries().forEach(entry => {
+                if (!entry.jointObj || !names.has(entry.jointObj.joint_name)) return;
+                entry.jointObj.joint_info = entry.jointObj.joint_info || {};
+                entry.jointObj.joint_info.command_interface = commandInterface;
+                if ((controller.type || '').includes('diff_drive')) {
+                    entry.jointObj.joint_info.state_interfaces = ['position', 'velocity'];
+                }
+            });
+        }
+
+        function automaticDiffDriveSides(joints) {
+            const positioned = joints.map(name => {
+                const entry = patcherEntries().find(item => item.jointObj?.joint_name === name);
+                return { name, y: Number(entry?.jointObj?.joint_info?.xyz?.[1]) };
+            });
+            if (positioned.length >= 2 && positioned.every(item => Number.isFinite(item.y))) {
+                positioned.sort((a, b) => a.y - b.y);
+                const split = Math.max(1, Math.floor(positioned.length / 2));
+                return {
+                    left: positioned.slice(split).map(item => item.name),
+                    right: positioned.slice(0, split).map(item => item.name),
+                };
+            }
+            const split = Math.max(1, Math.ceil(joints.length / 2));
+            return { left: joints.slice(0, split), right: joints.slice(split) };
+        }
+
+        function automaticWheelSeparation(left, right) {
+            const yFor = name => {
+                const entry = patcherEntries().find(item => item.jointObj?.joint_name === name);
+                return Number(entry?.jointObj?.joint_info?.xyz?.[1]);
+            };
+            const leftY = left.map(yFor), rightY = right.map(yFor);
+            if (!leftY.length || !rightY.length || ![...leftY, ...rightY].every(Number.isFinite)) return null;
+            const average = values => values.reduce((sum, value) => sum + value, 0) / values.length;
+            const result = Math.abs(average(leftY) - average(rightY));
+            return result > 1e-9 ? result : null;
+        }
+
+        function updateSelectedControllerType(type) {
+            const controller = selectedElement?.controller;
+            if (!controller || !CONTROLLER_TYPES.some(option => option[0] === type)) return;
+            saveState();
+            controller.type = type;
+            controller.name = controllerNameForType(type, controller);
+            controller.settings = controller.settings || {};
+            if (type.includes('diff_drive')) {
+                const joints = controller.joints || [];
+                const sides = automaticDiffDriveSides(joints);
+                controller.settings.left_wheel_names = sides.left;
+                controller.settings.right_wheel_names = sides.right;
+                controller.settings.wheel_sides_manual = false;
+                controller.settings.wheel_separation = automaticWheelSeparation(sides.left, sides.right);
+                controller.settings.wheel_separation_manual = false;
+                controller.settings.position_feedback = false;
+                delete controller.settings.wheel_radius;
+            } else if (type.includes('GripperActionController')) {
+                controller.settings.joint ||= (controller.joints || [])[0] || '';
+                controller.settings.goal_tolerance ??= 0.01;
+                controller.settings.max_effort ??= 0.0;
+            } else if (type.includes('PidController')) {
+                controller.settings.command_interface ||= 'position';
+                controller.settings.reference_and_state_interface ||= 'position';
+                controller.settings.p ??= 1.0;
+                controller.settings.i ??= 0.0;
+                controller.settings.d ??= 0.0;
+            } else if (type.includes('ForwardCommand')) {
+                controller.settings.command_interface ||= 'position';
+            }
+            applyControllerInterfaceToJoints(controller);
+            render({ skipPreview: true });
+        }
+
+        function updateSelectedControllerSetting(key, value, numeric = false) {
+            const controller = selectedElement?.controller;
+            if (!controller) return;
+            saveState();
+            controller.settings = controller.settings || {};
+            controller.settings[key] = numeric ? Number(value) : value;
+            if (key === 'wheel_separation') controller.settings.wheel_separation_manual = true;
+            if (key === 'wheel_radius') controller.settings.wheel_radius_manual = true;
+            if (key === 'command_interface') applyControllerInterfaceToJoints(controller);
+            render({ skipPreview: true });
+        }
+
+        function updateDiffDriveSide(jointName, side) {
+            const controller = selectedElement?.controller;
+            if (!controller) return;
+            saveState();
+            controller.settings = controller.settings || {};
+            const left = new Set(controller.settings.left_wheel_names || []);
+            const right = new Set(controller.settings.right_wheel_names || []);
+            left.delete(jointName); right.delete(jointName);
+            (side === 'left' ? left : right).add(jointName);
+            controller.settings.left_wheel_names = [...left];
+            controller.settings.right_wheel_names = [...right];
+            controller.settings.wheel_sides_manual = true;
+            if (!controller.settings.wheel_separation_manual) {
+                controller.settings.wheel_separation = automaticWheelSeparation([...left], [...right]);
+            }
+            render({ skipPreview: true });
+        }
+
+        function deleteSelectedController() {
+            const controller = selectedElement?.controller;
+            if (!controller) return;
+            saveState();
+            treeData._controllers = robotControllers().filter(candidate => candidate !== controller);
+            selectedElement = null;
+            render({ skipPreview: true });
+        }
+
+        function controllerTypeEditorHtml(controller) {
+            const type = controller.type || CONTROLLER_TYPES[0][0];
+            const selectedOption = CONTROLLER_TYPES.find(option => option[0] === type) || CONTROLLER_TYPES[0];
+            return `
+                <div class="joint-property-section-title">CONTROLLER TYPE</div>
+                <select class="form-control" onchange="updateSelectedControllerType(this.value)">
+                    ${CONTROLLER_TYPES.map(option => `<option value="${option[0]}" ${option[0] === type ? 'selected' : ''}>${option[1]}</option>`).join('')}
+                </select>
+                <div style="margin-top:5px;color:#92aab5;font-size:9px;line-height:1.45;word-break:break-all;">${escapeHtmlText(type)}<br>${escapeHtmlText(selectedOption[2])}</div>`;
+        }
+
+        function controllerSpecificSettingsHtml(controller, joints) {
+            const settings = controller.settings || {};
+            const type = controller.type || CONTROLLER_TYPES[0][0];
+            const interfaceOptions = ['position', 'velocity', 'effort'].map(value =>
+                `<option value="${value}" ${settings.command_interface === value ? 'selected' : ''}>${value}</option>`
+            ).join('');
+            let specific = '';
+            if (type.includes('diff_drive')) {
+                const left = new Set(settings.left_wheel_names || []);
+                const automaticSeparation = automaticWheelSeparation(
+                    [...left], joints.filter(name => !left.has(name))
+                );
+                specific = `
+                    ${joints.length < 2 ? '<div class="info-box" style="margin-top:10px;border-color:#d08b38;color:#ffd69b;">차동구동에는 LEFT와 RIGHT에 배정할 조인트가 최소 2개 필요합니다.</div>' : ''}
+                    <div class="joint-property-section-title" style="margin-top:12px;">DRIVE GEOMETRY · m</div>
+                    <div class="joint-property-grid two-column">
+                        <label>Wheel Separation<input type="number" step="0.001" class="form-control"
+                            value="${Number(settings.wheel_separation ?? automaticSeparation ?? 0)}"
+                            onchange="updateSelectedControllerSetting('wheel_separation', this.value, true)"></label>
+                        <label>Wheel Radius<input type="number" step="0.001" class="form-control"
+                            min="0.000001" value="${settings.wheel_radius == null ? '' : Number(settings.wheel_radius)}" placeholder="실측값 입력"
+                            onchange="updateSelectedControllerSetting('wheel_radius', this.value, true)"></label>
+                    </div>
+                    <div style="margin-top:5px;color:#92aab5;font-size:9px;line-height:1.45;">Wheel Separation은 CAD 조인트 Y 좌표(+Y=LEFT)로 계산됩니다. Wheel Radius는 내보낼 때 휠 CAD 메시에서 자동 계산하며, 메시가 없거나 직접 고정하려면 실측값을 입력하세요.</div>
+                    <div style="margin-top:9px;font-size:9px;color:#9fadb4;">Left / Right Wheels</div>
+                    <div class="parts-list" style="margin-top:4px;">
+                        ${joints.map(name => `<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                            <span>${escapeHtmlText(name)}</span>
+                            <select class="form-control" style="width:82px;padding:3px;" onchange="updateDiffDriveSide('${escapeHtmlText(name)}', this.value)">
+                                <option value="left" ${left.has(name) ? 'selected' : ''}>LEFT</option>
+                                <option value="right" ${!left.has(name) ? 'selected' : ''}>RIGHT</option>
+                            </select>
+                        </label>`).join('')}
+                    </div>`;
+            } else if (type.includes('GripperActionController')) {
+                specific = `
+                    <div class="joint-property-section-title" style="margin-top:12px;">GRIPPER</div>
+                    <label>Controlled Joint<select class="form-control" onchange="updateSelectedControllerSetting('joint', this.value)">
+                        ${joints.map(name => `<option value="${escapeHtmlText(name)}" ${settings.joint === name ? 'selected' : ''}>${escapeHtmlText(name)}</option>`).join('')}
+                    </select></label>
+                    <div class="joint-property-grid two-column">
+                        <label>Goal Tolerance<input type="number" step="0.001" class="form-control" value="${Number(settings.goal_tolerance ?? 0.01)}" onchange="updateSelectedControllerSetting('goal_tolerance', this.value, true)"></label>
+                        <label>Max Effort<input type="number" step="0.1" class="form-control" value="${Number(settings.max_effort ?? 0)}" onchange="updateSelectedControllerSetting('max_effort', this.value, true)"></label>
+                    </div>`;
+            } else if (type.includes('ForwardCommand')) {
+                specific = `<label style="margin-top:10px;">Command Interface<select class="form-control" onchange="updateSelectedControllerSetting('command_interface', this.value)">${interfaceOptions}</select></label>`;
+            } else if (type.includes('PidController')) {
+                const referenceOptions = ['position', 'velocity', 'acceleration', 'effort'].map(value =>
+                    `<option value="${value}" ${settings.reference_and_state_interface === value ? 'selected' : ''}>${value}</option>`
+                ).join('');
+                specific = `
+                    <div class="joint-property-grid two-column" style="margin-top:10px;">
+                        <label>Command Interface<select class="form-control" onchange="updateSelectedControllerSetting('command_interface', this.value)">${interfaceOptions}</select></label>
+                        <label>Reference / State<select class="form-control" onchange="updateSelectedControllerSetting('reference_and_state_interface', this.value)">${referenceOptions}</select></label>
+                    </div>
+                    <div class="joint-property-grid three-column">
+                        ${['p','i','d'].map(key => `<label>${key.toUpperCase()}<input type="number" step="0.01" class="form-control" value="${Number(settings[key] ?? (key === 'p' ? 1 : 0))}" onchange="updateSelectedControllerSetting('${key}', this.value, true)"></label>`).join('')}
+                    </div>`;
+            } else if (type.includes('JointStateBroadcaster')) {
+                specific = `<div class="info-box" style="margin-top:10px;">이 타입은 관절 상태만 발행합니다. command interface를 점유하거나 모터를 움직이지 않습니다.</div>`;
+            }
+            return specific;
         }
 
         function togglePatcherGroupingMode() {
@@ -7652,6 +10665,125 @@ HTML_CONTENT = """
             });
         }
 
+        function renderPatcherControllerFrames(canvas, entries) {
+            canvas.querySelectorAll('.patcher-controller-frame').forEach(frame => frame.remove());
+            const canvasRect = canvas.getBoundingClientRect();
+            const scale = canvas.offsetWidth ? canvasRect.width / canvas.offsetWidth : 1;
+            if (!Number.isFinite(scale) || scale <= 0) return;
+            const controllerFrameRecords = [];
+            robotControllers().forEach(controller => {
+                const jointNames = new Set(controller.joints || []);
+                const elements = [];
+                canvas.querySelectorAll('.patcher-joint-label').forEach(label => {
+                    if (jointNames.has(label.dataset.jointName)) elements.push(label);
+                });
+                entries.forEach(entry => {
+                    if (!entry.jointObj || !jointNames.has(entry.jointObj.joint_name)) return;
+                    const node = canvas.querySelector(
+                        `.patcher-node[data-patcher-id="${ensurePatcherNodeId(entry.node)}"]`
+                    );
+                    if (node) elements.push(node);
+                });
+                if (!elements.length) return;
+                const rects = elements.map(element => element.getBoundingClientRect());
+                // Keep the original generous controller enclosure. Label
+                // collisions are handled independently below.
+                const padding = 20;
+                const left = Math.min(...rects.map(rect => rect.left));
+                const top = Math.min(...rects.map(rect => rect.top));
+                const right = Math.max(...rects.map(rect => rect.right));
+                const bottom = Math.max(...rects.map(rect => rect.bottom));
+                const frame = document.createElement('div');
+                frame.className = 'patcher-controller-frame';
+                const color = controller.color || CONTROLLER_PALETTE[0];
+                frame.style.setProperty('--controller-color', color);
+                frame.style.setProperty('--controller-fill', controllerColorRgba(color, 0.14));
+                frame.style.setProperty('--controller-glow', controllerColorRgba(color, 0.3));
+                frame.style.setProperty('--controller-label', controllerColorRgba(color, 0.48));
+                const isSelected = selectedElement?.type === 'controller'
+                    && (selectedElement.controller === controller || selectedElement.controller?.name === controller.name);
+                if (isSelected) {
+                    frame.classList.add('selected');
+                }
+                const frameLeft = (left - canvasRect.left) / scale - padding;
+                const frameTop = (top - canvasRect.top) / scale - padding;
+                const frameWidth = (right - left) / scale + padding * 2;
+                const frameHeight = (bottom - top) / scale + padding * 2;
+                const frameBounds = {
+                    left: frameLeft,
+                    top: frameTop,
+                    right: frameLeft + frameWidth,
+                    bottom: frameTop + frameHeight,
+                };
+                const topLabelBounds = {
+                    left: frameLeft + 12,
+                    top: frameTop - 13,
+                    right: frameLeft + Math.min(frameWidth, 232),
+                    bottom: frameTop + 11,
+                };
+                frame.style.left = `${frameLeft}px`;
+                frame.style.top = `${frameTop}px`;
+                frame.style.width = `${frameWidth}px`;
+                frame.style.height = `${frameHeight}px`;
+
+                const borderSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                borderSvg.setAttribute('class', 'patcher-controller-border-hit');
+                borderSvg.style.position = 'absolute';
+                borderSvg.style.inset = '-6px';
+                borderSvg.style.width = 'calc(100% + 12px)';
+                borderSvg.style.height = 'calc(100% + 12px)';
+                borderSvg.style.pointerEvents = 'none';
+                borderSvg.style.overflow = 'visible';
+
+                const borderRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                borderRect.setAttribute('x', '6');
+                borderRect.setAttribute('y', '6');
+                borderRect.setAttribute('width', String(Math.max(0, frameWidth)));
+                borderRect.setAttribute('height', String(Math.max(0, frameHeight)));
+                borderRect.setAttribute('rx', '14');
+                borderRect.setAttribute('ry', '14');
+                borderRect.setAttribute('fill', 'none');
+                borderRect.setAttribute('stroke', 'rgba(0,0,0,0.001)');
+                borderRect.setAttribute('stroke-width', '16');
+                borderRect.style.pointerEvents = 'stroke';
+                borderRect.style.cursor = 'pointer';
+                borderRect.setAttribute('title', '눌러서 컨트롤러 속성과 이름을 수정');
+                borderRect.onpointerdown = event => {
+                    event.stopPropagation();
+                };
+                borderRect.onclick = event => {
+                    selectRobotController(event, controller);
+                };
+                borderSvg.appendChild(borderRect);
+                frame.appendChild(borderSvg);
+
+                const label = document.createElement('button');
+                label.type = 'button';
+                label.className = 'patcher-controller-label' + (isSelected ? ' selected' : '');
+                label.textContent = `${controller.name || 'controller'} · ${jointNames.size} joints`;
+                label.title = '눌러서 컨트롤러 속성과 이름을 수정';
+                label.onpointerdown = event => {
+                    event.stopPropagation();
+                };
+                label.onclick = event => {
+                    selectRobotController(event, controller);
+                };
+                frame.appendChild(label);
+                canvas.appendChild(frame);
+                controllerFrameRecords.push({ frame, frameBounds, topLabelBounds });
+            });
+            controllerFrameRecords.forEach((record, index) => {
+                const topLabelTouchesAnotherFrame = controllerFrameRecords.some((other, otherIndex) =>
+                    otherIndex !== index
+                    && record.topLabelBounds.left < other.frameBounds.right
+                    && record.topLabelBounds.right > other.frameBounds.left
+                    && record.topLabelBounds.top < other.frameBounds.bottom
+                    && record.topLabelBounds.bottom > other.frameBounds.top
+                );
+                record.frame.classList.toggle('label-bottom', topLabelTouchesAnotherFrame);
+            });
+        }
+
         function renderPatcherCables() {
             const canvas = document.getElementById('patcher-canvas');
             if (!canvas) return;
@@ -7671,8 +10803,12 @@ HTML_CONTENT = """
                             markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                         <path d="M 0 0 L 10 5 L 0 10 z" fill="#48a9ff"></path>
                     </marker>
+                    <marker id="patcher-arrow-disabled" viewBox="0 0 10 10" refX="8" refY="5"
+                            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#66707a"></path>
+                    </marker>
                 </defs>`;
-            canvas.querySelectorAll('.patcher-joint-label').forEach(label => label.remove());
+            canvas.querySelectorAll('.patcher-joint-label, .patcher-controller-frame').forEach(element => element.remove());
             const entries = patcherEntries();
 
             const addCable = (start, end, jointObj, className = '') => {
@@ -7680,10 +10816,14 @@ HTML_CONTENT = """
                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 path.setAttribute('d', cablePath(start, end));
                 path.classList.add('patcher-cable');
+                const cableDisabled = jointObj && (isJointDisabled(jointObj) || (jointObj.link_group && isLinkDisabled(jointObj.link_group)));
                 if (className) path.classList.add(className);
-                const markerType = className === 'prismatic'
-                    ? 'prismatic'
-                    : (className === 'world' || className === 'revolute' || className === 'continuous' ? 'motion' : 'fixed');
+                if (cableDisabled) path.classList.add('disabled');
+                const markerType = cableDisabled
+                    ? 'disabled'
+                    : (className === 'prismatic'
+                        ? 'prismatic'
+                        : (className === 'world' || className === 'revolute' || className === 'continuous' ? 'motion' : 'fixed'));
                 path.setAttribute('marker-end', `url(#patcher-arrow-${markerType})`);
                 if (jointObj && selectedElement && selectedElement.type === 'joint' && selectedElement.jointObj === jointObj) {
                     path.classList.add('selected');
@@ -7693,21 +10833,34 @@ HTML_CONTENT = """
                 const label = document.createElement('button');
                 label.type = 'button';
                 label.className = 'patcher-joint-label';
+                label.dataset.jointName = jointObj.joint_name;
+                if (cableDisabled) {
+                    label.classList.add('disabled');
+                }
                 if (selectedElement && selectedElement.type === 'joint' && selectedElement.jointObj === jointObj) {
                     label.classList.add('selected');
                 }
+                if (patcherControllerJointSelection.has(jointObj)) {
+                    label.classList.add('controller-pick');
+                }
                 label.style.left = `${(start.x + end.x) / 2}px`;
                 label.style.top = `${(start.y + end.y) / 2}px`;
-                label.textContent = `${jointObj.joint_name} · ${jointObj.joint_type}`;
+                label.textContent = cableDisabled
+                    ? `${jointObj.joint_name} · ${jointObj.joint_type} (비활성)`
+                    : `${jointObj.joint_name} · ${jointObj.joint_type}`;
                 const childEntry = entries.find(item => item.jointObj === jointObj);
                 label.onclick = event => {
                     event.stopPropagation();
+                    if (patcherControllerSelectionMode) {
+                        toggleControllerJointSelection(jointObj);
+                        return;
+                    }
                     if (childEntry) selectElement('joint', childEntry.node, jointObj);
                 };
                 canvas.appendChild(label);
             };
 
-            if (document.getElementById('fix-to-world')?.checked && treeData._patcher_world_connected) {
+            if (rootJointMode() !== 'none' && treeData._patcher_world_connected) {
                 addCable(
                     patcherPortPoint(canvas, '__world__', 'output'),
                     patcherPortPoint(canvas, ensurePatcherNodeId(treeData), 'input'),
@@ -7730,6 +10883,8 @@ HTML_CONTENT = """
                     item.jointObj.joint_type || 'fixed'
                 );
             });
+
+            renderPatcherControllerFrames(canvas, entries);
 
             if (patcherConnectionDrag && patcherConnectionDrag.pointer) {
                 const start = patcherPortPoint(
@@ -8021,6 +11176,7 @@ HTML_CONTENT = """
             const li = document.createElement('li');
             const wrapper = document.createElement('div');
             wrapper.className = 'node-wrapper';
+            const disabled = isLinkDisabled(node);
 
             if (jointObj) {
                 const jBadge = document.createElement('div');
@@ -8030,12 +11186,14 @@ HTML_CONTENT = """
                 if (selectedElement && selectedElement.type === 'joint' && selectedElement.jointObj === jointObj) {
                     jBadge.classList.add('selected');
                 }
+                const jointDisabled = isJointDisabled(jointObj);
+                if (jointDisabled) jBadge.classList.add('disabled');
                 jBadge.innerHTML = groupCandidate
                     ? `🧲 묶음 후보 · 겹쳐서 링크 만들기`
-                    : `⚙️ ${jointObj.joint_name} (${jointObj.joint_type})`;
+                    : `⚙️ ${jointObj.joint_name} (${jointObj.joint_type})${jointDisabled ? ' <span style="font-size:10px;opacity:0.8;">(비활성)</span>' : ''}`;
                 jBadge.title = groupCandidate
                     ? '함께 움직이는 부품이면 카드를 겹쳐 병합하고, 링크 사이 연결이면 클릭해 실제 조인트로 전환하세요.'
-                    : `${jointObj.joint_name} (${jointObj.joint_type})`;
+                    : `${jointObj.joint_name} (${jointObj.joint_type})${jointDisabled ? ' [비활성화됨]' : ''}`;
                 jBadge.onclick = (e) => {
                     e.stopPropagation();
                     selectElement('joint', node, jointObj);
@@ -8049,6 +11207,7 @@ HTML_CONTENT = """
             const treeNodeId = ensurePatcherNodeId(node);
             box.dataset.treeNodeId = treeNodeId;
             if (node.is_finalized) box.classList.add('finalized');
+            if (disabled) box.classList.add('disabled');
             box.draggable = true;
             
             if (selectedElement && selectedElement.type === 'link' && selectedElement.node === node) {
@@ -8067,6 +11226,35 @@ HTML_CONTENT = """
             treeNameText.innerText = node.name;
             nameDiv.appendChild(treeColorDot);
             nameDiv.appendChild(treeNameText);
+
+            if (disabled) {
+                const disabledBadge = document.createElement('span');
+                disabledBadge.className = 'patcher-disabled-badge';
+                disabledBadge.style.fontSize = '10px';
+                disabledBadge.style.padding = '1px 5px';
+                disabledBadge.style.borderRadius = '999px';
+                disabledBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+                disabledBadge.style.color = '#f87171';
+                disabledBadge.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+                disabledBadge.innerText = '비활성';
+                nameDiv.appendChild(disabledBadge);
+            }
+
+            if (node !== treeData) {
+                const toggleActiveButton = document.createElement('button');
+                toggleActiveButton.type = 'button';
+                toggleActiveButton.className = 'patcher-node-toggle';
+                toggleActiveButton.style.marginLeft = 'auto';
+                updateToggleActiveButtonUi(toggleActiveButton, disabled, node.name);
+                toggleActiveButton.onpointerdown = event => event.stopPropagation();
+                toggleActiveButton.onclick = event => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    toggleLinkActive(node);
+                };
+                nameDiv.appendChild(toggleActiveButton);
+            }
+
             box.appendChild(nameDiv);
 
             const partsDiv = document.createElement('div');
@@ -8163,10 +11351,12 @@ HTML_CONTENT = """
 
             flatLinks.forEach(item => {
                 const { node, parentList, index, parentName, jointObj, depth } = item;
+                const disabled = isLinkDisabled(node);
                 
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'list-link-item selectable';
                 if (node.is_finalized) itemDiv.classList.add('finalized');
+                if (disabled) itemDiv.classList.add('disabled');
                 itemDiv.draggable = true;
                 
                 const visualDepth = isPatcherJointActive(jointObj) ? depth : 0;
@@ -8182,9 +11372,10 @@ HTML_CONTENT = """
                 let connHtml = '';
                 if(parentName && isPatcherJointActive(jointObj)) {
                     let jType = jointObj.joint_type;
-                    let typeStyle = jType === 'fixed' ? 'color:#ff9800;' : 'color:#4caf50;';
+                    let typeStyle = isJointDisabled(jointObj) ? 'color:#888;' : (jType === 'fixed' ? 'color:#ff9800;' : 'color:#4caf50;');
+                    let jTypeText = isJointDisabled(jointObj) ? `${jType} (비활성)` : jType;
                     connHtml = `<div style="font-size:10px; color:#aaa; margin-bottom:4px;">
-                        ↳ <b>${parentName}</b> 와(과) 연결됨 (<span style="${typeStyle}">${jType}</span>: ${jointObj.joint_name})
+                        ↳ <b>${parentName}</b> 와(과) 연결됨 (<span style="${typeStyle}">${jTypeText}</span>: ${jointObj.joint_name})
                     </div>`;
                 }
 
@@ -8223,9 +11414,23 @@ HTML_CONTENT = """
                 
                 const badgeSpan = document.createElement('span');
                 badgeSpan.className = 'list-link-badge';
-                badgeSpan.innerText = `${node.components.length} Parts`;
+                badgeSpan.innerText = disabled ? `${node.components.length} Parts (비활성)` : `${node.components.length} Parts`;
+                if (disabled) badgeSpan.style.color = '#ff7b7b';
                 
                 titleDiv.appendChild(leftDiv);
+                if (node !== treeData) {
+                    const listToggle = document.createElement('button');
+                    listToggle.type = 'button';
+                    listToggle.className = 'patcher-node-toggle';
+                    listToggle.style.marginLeft = 'auto';
+                    listToggle.style.marginRight = '6px';
+                    updateToggleActiveButtonUi(listToggle, disabled, node.name);
+                    listToggle.onclick = e => {
+                        e.stopPropagation();
+                        toggleLinkActive(node);
+                    };
+                    titleDiv.appendChild(listToggle);
+                }
                 titleDiv.appendChild(badgeSpan);
                 
                 const partsDiv = document.createElement('div');
@@ -8249,6 +11454,7 @@ HTML_CONTENT = """
         function attachDragDropEvents(domElement, node, parentList, index) {
             domElement.ondragstart = (e) => {
                 e.stopPropagation();
+                draggedPhysicalMaterialKey = null;
                 document.body.classList.add('is-dragging');
                 if (previewUpdateTimer) {
                     clearTimeout(previewUpdateTimer);
@@ -8270,6 +11476,15 @@ HTML_CONTENT = """
             };
             domElement.ondragover = (e) => {
                 e.preventDefault(); e.stopPropagation();
+                if (draggedPhysicalMaterialKey) {
+                    e.dataTransfer.dropEffect = 'copy';
+                    if (currentDragOverElement && currentDragOverElement !== domElement) {
+                        currentDragOverElement.classList.remove('drag-over', 'material-drop-target');
+                    }
+                    currentDragOverElement = domElement;
+                    domElement.classList.add('material-drop-target');
+                    return;
+                }
                 if (draggedNode && draggedNode !== node && currentDragOverElement !== domElement) {
                     if (currentDragOverElement) currentDragOverElement.classList.remove('drag-over');
                     currentDragOverElement = domElement;
@@ -8279,7 +11494,7 @@ HTML_CONTENT = """
             domElement.ondragleave = (e) => { 
                 e.preventDefault(); e.stopPropagation();
                 if (currentDragOverElement === domElement) {
-                    domElement.classList.remove('drag-over');
+                    domElement.classList.remove('drag-over', 'material-drop-target');
                     currentDragOverElement = null;
                 }
             };
@@ -8287,8 +11502,14 @@ HTML_CONTENT = """
                 e.preventDefault(); e.stopPropagation();
                 document.body.classList.remove('is-dragging');
                 if (currentDragOverElement) {
-                    currentDragOverElement.classList.remove('drag-over');
+                    currentDragOverElement.classList.remove('drag-over', 'material-drop-target');
                     currentDragOverElement = null;
+                }
+                const materialKey = draggedPhysicalMaterialKey || e.dataTransfer.getData('application/x-petasos-material');
+                if (materialKey) {
+                    applyPhysicalMaterialToLink(node, materialKey);
+                    finishPhysicalMaterialDrag();
+                    return;
                 }
                 
                 if (draggedNode && draggedNode !== node) {
@@ -8315,6 +11536,8 @@ HTML_CONTENT = """
             if (jointOriginPickMode && jointOriginPickJoint !== jointObj) {
                 cancelJointOriginPick('다른 항목을 선택하여 조인트 위치 지정을 취소했습니다.');
             }
+            baseFootprintFrameSelected = false;
+            if (baseFootprintFrameMarker) baseFootprintFrameMarker.visible = false;
             viewerSelectedComponent = null;
             viewerSelectedComponents.clear();
             // 이미 선택된 항목을 다시 클릭하면 선택 해제 (토글 기능)
@@ -8332,6 +11555,7 @@ HTML_CONTENT = """
                 }
             }
 
+            updateSelectedJointFrameVisibility();
             render(); 
         }
 
@@ -8419,6 +11643,12 @@ HTML_CONTENT = """
                 : 0.1;
             const effortUnit = isPrismatic ? 'N' : 'N·m';
             const velocityUnit = isPrismatic ? 'm/s' : 'rad/s';
+            const zeroOffsetCalibration = Number(jointInfo._zero_offset_calibration);
+            const hasZeroCalibration = Number.isFinite(zeroOffsetCalibration)
+                && Math.abs(zeroOffsetCalibration) > 1e-12;
+            const zeroOffsetDisplay = isPrismatic
+                ? zeroOffsetCalibration
+                : THREE.MathUtils.radToDeg(zeroOffsetCalibration);
 
             return `
                 <div class="joint-control" style="margin-bottom:12px;">
@@ -8448,6 +11678,24 @@ HTML_CONTENT = """
                         </div>
                         <span>${max}</span>
                     </div>
+                    <button type="button" class="form-control"
+                            data-set-joint-zero="${index}"
+                            onclick="setPreviewJointZero(${index})"
+                            ${Math.abs(currentValue) <= 1e-9 ? 'disabled' : ''}
+                            title="현재 조립 자세를 유지한 채 이 위치를 URDF 조인트 0으로 다시 정의합니다."
+                            style="cursor:pointer;margin-top:8px;border-color:#36b6d9;color:#dff8ff;background:#173d49;">
+                        현재 ${Number.isInteger(currentValue) ? currentValue : currentValue.toFixed(3)}${isPrismatic ? ' m' : '°'} 자세를 0으로 설정
+                    </button>
+                    <div class="joint-limit-summary">
+                        현재 자세는 유지하고 원점과 가동 범위를 함께 이동합니다.
+                    </div>
+                    ${hasZeroCalibration ? `
+                    <button type="button" class="form-control"
+                            onclick="revertPreviewJointZero(${index})"
+                            title="베이크한 영점 오프셋과 하위 부품 변환을 함께 되돌립니다."
+                            style="cursor:pointer;margin-top:6px;border-color:#d49a3a;color:#ffe9bf;background:#493519;">
+                        영점 설정 취소 (${Number(zeroOffsetDisplay.toFixed(3))}${isPrismatic ? ' m' : '°'})
+                    </button>` : ''}
                     ${isContinuous ? '<div class="joint-limit-summary">미리보기 조작 범위 · URDF 회전 제한 아님</div>' : ''}
                     <div class="joint-limit-editor joint-type-settings">
                         <div class="joint-parameter-heading">
@@ -8503,8 +11751,601 @@ HTML_CONTENT = """
             `;
         }
 
+        function physicalMaterialLibrary() {
+            if (!treeData) return {};
+            if (!treeData._physical_materials || typeof treeData._physical_materials !== 'object') {
+                treeData._physical_materials = {};
+            }
+            return treeData._physical_materials;
+        }
+
+        function physicalMaterialAssignments() {
+            if (!treeData) return {};
+            if (!treeData._component_material_assignments || typeof treeData._component_material_assignments !== 'object') {
+                treeData._component_material_assignments = {};
+            }
+            return treeData._component_material_assignments;
+        }
+
+        function materialColorHex(rgba) {
+            const values = String(rgba || '').trim().split(/\s+/).slice(0, 3).map(Number);
+            if (values.length !== 3 || values.some(value => !Number.isFinite(value))) return '#9ca3af';
+            return '#' + values.map(value => Math.round(Math.max(0, Math.min(1, value)) * 255)
+                .toString(16).padStart(2, '0')).join('');
+        }
+
+        function materialRgbaFromHex(hex) {
+            const value = String(hex || '#9ca3af').replace('#', '');
+            if (!/^[0-9a-fA-F]{6}$/.test(value)) return '0.612 0.639 0.686 1.000';
+            return [0, 2, 4].map(index => (parseInt(value.slice(index, index + 2), 16) / 255).toFixed(3))
+                .concat('1.000').join(' ');
+        }
+
+        function physicalMaterialCategoryOrder() {
+            return [
+                '금속', '플라스틱',
+                '3D 프린팅 · 필라멘트', '3D 프린팅 · 레진', '3D 프린팅 · 분말/금속',
+                '복합재·탄성체', '기타', '사용자 재질'
+            ];
+        }
+
+        function groupedPhysicalMaterials(searchQuery = '') {
+            const categoryOrder = physicalMaterialCategoryOrder();
+            const grouped = new Map(categoryOrder.map(category => [category, []]));
+            const normalizedQuery = String(searchQuery || '').trim().toLocaleLowerCase();
+            Object.entries(physicalMaterialLibrary()).forEach(([key, material]) => {
+                const category = String(material.category || (material.builtin ? '기타' : '사용자 재질'));
+                const searchable = [
+                    key,
+                    material.name || '',
+                    category,
+                    Number(material.density || 0).toLocaleString(),
+                    String(Number(material.density || 0)),
+                ].join(' ').toLocaleLowerCase();
+                if (normalizedQuery && !searchable.includes(normalizedQuery)) return;
+                if (!grouped.has(category)) grouped.set(category, []);
+                grouped.get(category).push([key, material]);
+            });
+            return grouped;
+        }
+
+        function patcherMaterialShelfCardsHtml() {
+            const entries = [];
+            groupedPhysicalMaterials(patcherMaterialShelfQuery).forEach(categoryEntries => {
+                categoryEntries.forEach(entry => entries.push(entry));
+            });
+            const materialCards = entries.length ? entries.map(([key, material]) => `
+                <div class="patcher-material-card" draggable="true"
+                     data-material-key="${escapeHtmlText(key)}"
+                     ondragstart="startPhysicalMaterialDrag(event, this)"
+                     ondragend="finishPhysicalMaterialDrag()"
+                     title="${escapeHtmlText(material.name || key)} 재질을 링크 전체에 적용">
+                    <span class="material-drag-swatch" style="background:${materialColorHex(material.rgba)}"></span>
+                    <span class="material-drag-copy">
+                        <strong>${escapeHtmlText(material.name || key)}</strong>
+                        <small>${Number(material.density || 0).toLocaleString()} kg/m³</small>
+                    </span>
+                    <span class="material-drag-grip" aria-hidden="true">⠿</span>
+                </div>
+            `).join('') : '<div class="patcher-material-empty">검색 결과가 없습니다.</div>';
+            const addCard = `
+                <button type="button" class="patcher-material-card patcher-material-add-card"
+                        onclick="openPatcherMaterialCreator()"
+                        title="새 사용자 재질 추가">
+                    <span>＋</span><span>새 재질 추가</span>
+                </button>
+            `;
+            const createForm = patcherMaterialCreateOpen ? `
+                <div class="patcher-material-create">
+                    <label>재질 이름
+                        <input id="patcher-new-material-name" type="text" placeholder="예: TPU 95A"
+                               onkeydown="if (event.key === 'Enter') createPhysicalMaterialFromShelf()">
+                    </label>
+                    <label>밀도 · kg/m³
+                        <input id="patcher-new-material-density" type="number" min="0.001" step="1" value="1000">
+                    </label>
+                    <label>표시 색상
+                        <input id="patcher-new-material-color" type="color" value="#9ca3af">
+                    </label>
+                    <div class="patcher-material-create-actions">
+                        <button type="button" onclick="createPhysicalMaterialFromShelf()">추가</button>
+                        <button type="button" onclick="closePatcherMaterialCreator()">취소</button>
+                    </div>
+                </div>
+            ` : '';
+            return materialCards + addCard + createForm;
+        }
+
+        function refreshPatcherMaterialShelfCards() {
+            const search = document.getElementById('patcher-material-shelf-search');
+            const cards = document.getElementById('patcher-material-shelf-cards');
+            if (search) search.value = patcherMaterialShelfQuery;
+            if (cards) cards.innerHTML = patcherMaterialShelfCardsHtml();
+        }
+
+        function openPatcherMaterialCreator() {
+            patcherMaterialCreateOpen = true;
+            refreshPatcherMaterialShelfCards();
+            const input = document.getElementById('patcher-new-material-name');
+            input?.focus();
+            input?.scrollIntoView({ block: 'nearest' });
+        }
+
+        function closePatcherMaterialCreator() {
+            patcherMaterialCreateOpen = false;
+            refreshPatcherMaterialShelfCards();
+        }
+
+        function createPhysicalMaterialFromShelf() {
+            if (!treeData) return;
+            const name = String(document.getElementById('patcher-new-material-name')?.value || '').trim();
+            const density = Number(document.getElementById('patcher-new-material-density')?.value);
+            const color = document.getElementById('patcher-new-material-color')?.value || '#9ca3af';
+            if (!name) return alert('재질 이름을 입력하세요.');
+            if (!Number.isFinite(density) || density <= 0) {
+                return alert('밀도는 0보다 큰 kg/m³ 값이어야 합니다.');
+            }
+            saveState();
+            const library = physicalMaterialLibrary();
+            let index = 1;
+            let key = `custom_material_${index}`;
+            while (library[key]) key = `custom_material_${++index}`;
+            library[key] = {
+                name,
+                density,
+                rgba: materialRgbaFromHex(color),
+                category: '사용자 재질',
+                builtin: false,
+            };
+            selectedPhysicalMaterialKey = key;
+            patcherMaterialCreateOpen = false;
+            patcherMaterialShelfQuery = '';
+            refreshPatcherMaterialShelfCards();
+            updatePanel();
+            scheduleWorkspaceAutosave();
+            const status = document.getElementById('patcher-validation');
+            if (status) status.textContent = `'${name}' 재질을 추가했습니다. 링크 카드로 드래그해 적용하세요.`;
+        }
+
+        function syncPatcherMaterialShelf(root = document) {
+            const controls = root.querySelector?.('#patcher-controls');
+            const shelf = root.querySelector?.('#patcher-material-shelf');
+            const toggle = root.querySelector?.('#patcher-material-shelf-toggle');
+            const search = root.querySelector?.('#patcher-material-shelf-search');
+            const cards = root.querySelector?.('#patcher-material-shelf-cards');
+            if (!shelf || !toggle) return;
+            shelf.hidden = !patcherMaterialShelfExpanded;
+            controls?.classList.toggle('material-shelf-open', patcherMaterialShelfExpanded);
+            toggle.classList.toggle('material-shelf-active', patcherMaterialShelfExpanded);
+            toggle.textContent = patcherMaterialShelfExpanded ? '▴ 재질 라이브러리' : '▾ 재질 라이브러리';
+            toggle.setAttribute('aria-expanded', String(patcherMaterialShelfExpanded));
+            if (!patcherMaterialShelfExpanded) return;
+            if (search) search.value = patcherMaterialShelfQuery;
+            if (cards) cards.innerHTML = patcherMaterialShelfCardsHtml();
+            requestAnimationFrame(positionPatcherMaterialShelf);
+        }
+
+        function positionPatcherMaterialShelf() {
+            const controls = document.getElementById('patcher-controls');
+            const toggle = document.getElementById('patcher-material-shelf-toggle');
+            const shelf = document.getElementById('patcher-material-shelf');
+            if (!controls || !toggle || !shelf || shelf.hidden) return;
+            const preferredLeft = toggle.offsetLeft;
+            const maxLeft = Math.max(0, controls.clientWidth - shelf.offsetWidth);
+            shelf.style.left = `${Math.min(preferredLeft, maxLeft)}px`;
+            shelf.style.right = 'auto';
+        }
+
+        function togglePatcherMaterialShelf() {
+            patcherMaterialShelfExpanded = !patcherMaterialShelfExpanded;
+            syncPatcherMaterialShelf(document);
+            if (patcherMaterialShelfExpanded) {
+                document.getElementById('patcher-material-shelf-search')?.focus();
+            }
+        }
+
+        function filterPatcherMaterialShelf(query) {
+            patcherMaterialShelfQuery = String(query || '');
+            refreshPatcherMaterialShelfCards();
+        }
+
+        function physicalMaterialOptions(selectedKey, includeOriginal = false) {
+            const original = includeOriginal
+                ? `<option value="" ${selectedKey ? '' : 'selected'}>CAD 원본 재질 유지</option>`
+                : '';
+            return original + [...groupedPhysicalMaterials().entries()]
+                .filter(([, entries]) => entries.length)
+                .map(([category, entries]) => `
+                    <optgroup label="${escapeHtmlText(category)}">
+                        ${entries.map(([key, material]) => `
+                            <option value="${escapeHtmlText(key)}" ${key === selectedKey ? 'selected' : ''}>
+                                ${escapeHtmlText(material.name || key)} · ${Number(material.density || 0).toLocaleString()} kg/m³
+                            </option>
+                        `).join('')}
+                    </optgroup>
+                `).join('');
+        }
+
+        function physicalMaterialLabel(key) {
+            if (!key) return 'CAD 원본 재질 유지';
+            const material = physicalMaterialLibrary()[key];
+            if (!material) return key;
+            return `${material.name || key} · ${Number(material.density || 0).toLocaleString()} kg/m³`;
+        }
+
+        function componentMaterialPickerHtml(component, materialKey) {
+            return `
+                <button type="button" class="form-control physical-material-picker-trigger"
+                        data-component="${escapeHtmlText(component)}"
+                        data-material-key="${escapeHtmlText(materialKey)}"
+                        onclick="openPhysicalMaterialPicker(this)">
+                    <span>${escapeHtmlText(physicalMaterialLabel(materialKey))}</span>
+                    <span>▼</span>
+                </button>
+            `;
+        }
+
+        function closePhysicalMaterialPicker() {
+            document.getElementById('physical-material-popover')?.remove();
+            activePhysicalMaterialComponent = null;
+            activePhysicalMaterialKey = '';
+        }
+
+        function appendPhysicalMaterialOption(container, key, label, density = null) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'physical-material-popover-option';
+            if (key === activePhysicalMaterialKey) button.classList.add('active');
+            const name = document.createElement('span');
+            name.textContent = label;
+            button.appendChild(name);
+            if (density !== null) {
+                const value = document.createElement('small');
+                value.textContent = `${Number(density || 0).toLocaleString()} kg/m³`;
+                button.appendChild(value);
+            }
+            button.onclick = event => {
+                event.stopPropagation();
+                choosePhysicalMaterial(key);
+            };
+            container.appendChild(button);
+        }
+
+        function renderPhysicalMaterialPickerResults(searchQuery = '') {
+            const results = document.getElementById('physical-material-popover-results');
+            if (!results) return;
+            results.innerHTML = '';
+            appendPhysicalMaterialOption(results, '', 'CAD 원본 재질 유지');
+            let matchCount = 0;
+            groupedPhysicalMaterials(searchQuery).forEach((entries, category) => {
+                if (!entries.length) return;
+                const heading = document.createElement('div');
+                heading.className = 'physical-material-popover-category';
+                heading.textContent = category;
+                results.appendChild(heading);
+                entries.forEach(([key, material]) => {
+                    appendPhysicalMaterialOption(
+                        results,
+                        key,
+                        material.name || key,
+                        material.density,
+                    );
+                    matchCount++;
+                });
+            });
+            if (!matchCount && String(searchQuery || '').trim()) {
+                const empty = document.createElement('div');
+                empty.className = 'physical-material-popover-empty';
+                empty.textContent = '검색 결과가 없습니다.';
+                results.appendChild(empty);
+            }
+        }
+
+        function openPhysicalMaterialPicker(trigger) {
+            if (!trigger) return;
+            const component = trigger.dataset.component || '';
+            const existing = document.getElementById('physical-material-popover');
+            if (existing && activePhysicalMaterialComponent === component) {
+                closePhysicalMaterialPicker();
+                return;
+            }
+            closePhysicalMaterialPicker();
+            activePhysicalMaterialComponent = component;
+            activePhysicalMaterialKey = trigger.dataset.materialKey || '';
+
+            const popover = document.createElement('div');
+            popover.id = 'physical-material-popover';
+            popover.className = 'physical-material-popover';
+            popover.innerHTML = `
+                <input class="physical-material-popover-search" type="search"
+                       placeholder="재질 검색 · ABS, PLA, 레진, 밀도..."
+                       aria-label="재질 검색">
+                <div id="physical-material-popover-results" class="physical-material-popover-results"></div>
+            `;
+            document.body.appendChild(popover);
+            const input = popover.querySelector('.physical-material-popover-search');
+            input.oninput = () => renderPhysicalMaterialPickerResults(input.value);
+            input.onkeydown = event => {
+                if (event.key === 'Escape') closePhysicalMaterialPicker();
+            };
+            renderPhysicalMaterialPickerResults('');
+
+            const rect = trigger.getBoundingClientRect();
+            const width = Math.min(380, Math.max(300, rect.width));
+            popover.style.width = `${width}px`;
+            const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+            popover.style.left = `${left}px`;
+            const availableBelow = window.innerHeight - rect.bottom - 8;
+            const desiredHeight = Math.min(500, popover.offsetHeight || 500);
+            const top = availableBelow >= Math.min(300, desiredHeight)
+                ? rect.bottom + 4
+                : Math.max(8, rect.top - desiredHeight - 4);
+            popover.style.top = `${top}px`;
+            input.focus();
+        }
+
+        function choosePhysicalMaterial(key) {
+            if (!treeData || !activePhysicalMaterialComponent) return;
+            saveState();
+            const assignments = physicalMaterialAssignments();
+            if (key) assignments[activePhysicalMaterialComponent] = key;
+            else delete assignments[activePhysicalMaterialComponent];
+            closePhysicalMaterialPicker();
+            updatePanel();
+            scheduleWorkspaceAutosave();
+        }
+
+        document.addEventListener('pointerdown', event => {
+            const popover = document.getElementById('physical-material-popover');
+            if (!popover) return;
+            if (popover.contains(event.target)) return;
+            if (event.target.closest?.('.physical-material-picker-trigger')) return;
+            closePhysicalMaterialPicker();
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape') closePhysicalMaterialPicker();
+        });
+        window.addEventListener('resize', closePhysicalMaterialPicker);
+        window.addEventListener('resize', positionPatcherMaterialShelf);
+
+        function componentMaterialMassText(component, materialKey) {
+            const snapshot = (treeData?._component_physical || {})[component] || {};
+            const originalMass = Number(snapshot.mass);
+            if (!materialKey) {
+                return Number.isFinite(originalMass) ? `원본 ${originalMass.toFixed(3)} kg` : 'CAD 원본 물성';
+            }
+            const density = Number(physicalMaterialLibrary()[materialKey]?.density);
+            let volume = Number(snapshot.volume_m3);
+            if (!(volume > 0)) {
+                const referenceDensity = Number(snapshot.density);
+                if (originalMass > 0 && referenceDensity > 0) volume = originalMass / referenceDensity;
+            }
+            if (!(volume > 0) || !(density > 0)) return '체적 정보 없음 · 적용 시 경고';
+            return `예상 질량 ${(volume * density).toFixed(3)} kg`;
+        }
+
+        function selectedMaterialEditorHtml() {
+            const library = physicalMaterialLibrary();
+            const keys = Object.keys(library);
+            if (!selectedPhysicalMaterialKey || !library[selectedPhysicalMaterialKey]) {
+                selectedPhysicalMaterialKey = keys[0] || null;
+            }
+            const material = selectedPhysicalMaterialKey ? library[selectedPhysicalMaterialKey] : null;
+            return `
+                <select class="form-control physical-material-select" data-include-original="0"
+                        onchange="selectPhysicalMaterial(this.value)">
+                    ${physicalMaterialOptions(selectedPhysicalMaterialKey, false)}
+                </select>
+                ${material ? `
+                <div class="material-drag-card" draggable="true"
+                     data-material-key="${escapeHtmlText(selectedPhysicalMaterialKey)}"
+                     ondragstart="startPhysicalMaterialDrag(event, this)"
+                     ondragend="finishPhysicalMaterialDrag()"
+                     title="로봇 구조 트리의 링크 카드에 놓으면 포함된 모든 부품에 적용됩니다.">
+                    <span class="material-drag-swatch" style="background:${materialColorHex(material.rgba)}"></span>
+                    <span class="material-drag-copy">
+                        <strong>${escapeHtmlText(material.name || selectedPhysicalMaterialKey)}</strong>
+                        <small>링크로 드래그 · 모든 부품에 일괄 적용</small>
+                    </span>
+                    <span class="material-drag-grip" aria-hidden="true">⠿</span>
+                </div>` : ''}
+                <div class="material-library-grid">
+                    <label>재질 이름
+                        <input id="physical-material-name" class="form-control" type="text"
+                               value="${escapeHtmlText(material?.name || '')}" placeholder="새 재질">
+                    </label>
+                    <label>밀도 · kg/m³
+                        <input id="physical-material-density" class="form-control" type="number"
+                               min="0.001" step="1" value="${Number(material?.density || 1000)}">
+                    </label>
+                    <label>표시 색상
+                        <input id="physical-material-color" class="form-control" type="color"
+                               value="${materialColorHex(material?.rgba)}">
+                    </label>
+                </div>
+                <div class="material-library-actions">
+                    <button type="button" class="form-control" onclick="createPhysicalMaterial()">＋ 추가</button>
+                    <button type="button" class="form-control" onclick="savePhysicalMaterial()"
+                            style="border-color:#39a96b;color:#c9ffe0;">저장</button>
+                    <button type="button" class="form-control" onclick="deletePhysicalMaterial()"
+                            ${material?.builtin ? 'disabled title="기본 재질은 삭제할 수 없습니다."' : ''}
+                            style="border-color:#9b5a5a;color:#ffd0d0;">삭제</button>
+                </div>
+            `;
+        }
+
+        function componentMaterialEditorHtml(node) {
+            return `
+                <details class="material-library-details"
+                         ${physicalMaterialLibraryExpanded ? 'open' : ''}
+                         ontoggle="setPhysicalMaterialLibraryExpanded(this.open)">
+                    <summary>
+                        <span>재질 라이브러리</span>
+                        <small>${Object.keys(physicalMaterialLibrary()).length}개 · 열어서 추가·수정</small>
+                    </summary>
+                    <div class="material-library-content">
+                        ${selectedMaterialEditorHtml()}
+                    </div>
+                </details>
+            `;
+        }
+
+        function setPhysicalMaterialLibraryExpanded(expanded) {
+            physicalMaterialLibraryExpanded = !!expanded;
+        }
+
+        function startPhysicalMaterialDrag(event, source) {
+            const key = source?.dataset?.materialKey || '';
+            if (!key || !physicalMaterialLibrary()[key]) {
+                event.preventDefault();
+                return;
+            }
+            closePhysicalMaterialPicker();
+            draggedNode = null;
+            draggedPhysicalMaterialKey = key;
+            draggedPhysicalMaterialSource = source;
+            source.classList.add('dragging');
+            document.body.classList.add('material-dragging');
+            event.dataTransfer.effectAllowed = 'copy';
+            event.dataTransfer.setData('application/x-petasos-material', key);
+            event.dataTransfer.setData('text/plain', physicalMaterialLabel(key));
+        }
+
+        function finishPhysicalMaterialDrag() {
+            draggedPhysicalMaterialSource?.classList.remove('dragging');
+            draggedPhysicalMaterialSource = null;
+            draggedPhysicalMaterialKey = null;
+            document.body.classList.remove('material-dragging');
+            if (currentDragOverElement) {
+                currentDragOverElement.classList.remove('drag-over', 'material-drop-target');
+                currentDragOverElement = null;
+            }
+            document.querySelectorAll('.material-drop-target').forEach(element => {
+                element.classList.remove('material-drop-target');
+            });
+        }
+
+        function applyPhysicalMaterialToLink(node, materialKey) {
+            const material = physicalMaterialLibrary()[materialKey];
+            const components = Array.isArray(node?.components) ? node.components : [];
+            if (!material || !components.length) return false;
+            saveState();
+            const assignments = physicalMaterialAssignments();
+            components.forEach(component => assignments[component] = materialKey);
+            selectedElement = { type: 'link', node, jointObj: null };
+            render({ skipPreview: true });
+            const status = document.getElementById('patcher-validation');
+            if (status) {
+                status.textContent = `${node.name}: ${components.length}개 부품에 '${material.name || materialKey}' 재질을 적용했습니다.`;
+            }
+            return true;
+        }
+
+        function attachPhysicalMaterialDropEvents(domElement, node) {
+            domElement.ondragover = event => {
+                if (!draggedPhysicalMaterialKey) return;
+                event.preventDefault();
+                event.stopPropagation();
+                event.dataTransfer.dropEffect = 'copy';
+                if (currentDragOverElement && currentDragOverElement !== domElement) {
+                    currentDragOverElement.classList.remove('drag-over', 'material-drop-target');
+                }
+                currentDragOverElement = domElement;
+                domElement.classList.add('material-drop-target');
+            };
+            domElement.ondragleave = event => {
+                if (!draggedPhysicalMaterialKey || domElement.contains(event.relatedTarget)) return;
+                domElement.classList.remove('material-drop-target');
+                if (currentDragOverElement === domElement) currentDragOverElement = null;
+            };
+            domElement.ondrop = event => {
+                const materialKey = draggedPhysicalMaterialKey || event.dataTransfer.getData('application/x-petasos-material');
+                if (!materialKey) return;
+                event.preventDefault();
+                event.stopPropagation();
+                applyPhysicalMaterialToLink(node, materialKey);
+                finishPhysicalMaterialDrag();
+            };
+        }
+
+        function selectPhysicalMaterial(key) {
+            selectedPhysicalMaterialKey = key || null;
+            updatePanel();
+        }
+
+        function createPhysicalMaterial() {
+            if (!treeData) return;
+            saveState();
+            const library = physicalMaterialLibrary();
+            let index = 1;
+            let key = `custom_material_${index}`;
+            while (library[key]) key = `custom_material_${++index}`;
+            library[key] = {
+                name: `사용자 재질 ${index}`,
+                density: 1000,
+                rgba: '0.612 0.639 0.686 1.000',
+                category: '사용자 재질',
+                builtin: false,
+            };
+            selectedPhysicalMaterialKey = key;
+            updatePanel();
+            scheduleWorkspaceAutosave();
+            document.getElementById('physical-material-name')?.focus();
+        }
+
+        function savePhysicalMaterial() {
+            const material = physicalMaterialLibrary()[selectedPhysicalMaterialKey];
+            if (!material) return;
+            const name = String(document.getElementById('physical-material-name')?.value || '').trim();
+            const density = Number(document.getElementById('physical-material-density')?.value);
+            const color = document.getElementById('physical-material-color')?.value;
+            if (!name) return alert('재질 이름을 입력하세요.');
+            if (!Number.isFinite(density) || density <= 0) return alert('밀도는 0보다 큰 kg/m³ 값이어야 합니다.');
+            saveState();
+            material.name = name;
+            material.density = density;
+            material.rgba = materialRgbaFromHex(color);
+            updatePanel();
+            scheduleWorkspaceAutosave();
+        }
+
+        function deletePhysicalMaterial() {
+            const library = physicalMaterialLibrary();
+            const key = selectedPhysicalMaterialKey;
+            if (!key || !library[key]) return;
+            if (library[key].builtin) return alert('기본 재질은 삭제할 수 없습니다. 이름·밀도·색상은 수정할 수 있습니다.');
+            if (!confirm(`'${library[key].name || key}' 재질을 삭제할까요? 지정된 부품은 CAD 원본 재질로 돌아갑니다.`)) return;
+            saveState();
+            delete library[key];
+            const assignments = physicalMaterialAssignments();
+            Object.keys(assignments).forEach(component => {
+                if (assignments[component] === key) delete assignments[component];
+            });
+            selectedPhysicalMaterialKey = Object.keys(library)[0] || null;
+            updatePanel();
+            scheduleWorkspaceAutosave();
+        }
+
         function updatePanel() {
             const body = document.getElementById('panel-body');
+            const nextPanelSelectionIdentity = selectedElement?.controller || selectedElement?.jointObj || selectedElement?.node || null;
+            if (nextPanelSelectionIdentity !== panelSelectionIdentity) {
+                panelSelectionIdentity = nextPanelSelectionIdentity;
+                queueMicrotask(() => {
+                    if (body) body.scrollTop = 0;
+                });
+            }
+            const panelHeader = document.getElementById('selected-properties-header');
+            if (panelHeader) {
+                const jointSelected = selectedElement?.type === 'joint' && selectedElement.jointObj;
+                const controllerSelected = selectedElement?.type === 'controller' && selectedElement.controller;
+                panelHeader.classList.toggle('joint-selected', !!jointSelected || !!controllerSelected);
+                panelHeader.textContent = jointSelected
+                    ? `조인트 속성 · ${selectedElement.jointObj.joint_name}`
+                    : controllerSelected
+                        ? `컨트롤러 속성 · ${selectedElement.controller.name}`
+                        : '선택된 항목 속성';
+            }
             if (!selectedElement) {
                 body.innerHTML = `
                     <div class="empty-state">왼쪽 구조 트리나 아래 리스트에서 항목을 클릭하여<br>상세 속성을 편집하세요.</div>
@@ -8512,12 +12353,73 @@ HTML_CONTENT = """
                 return;
             }
 
-            if (selectedElement.type === 'link') {
+            if (selectedElement.type === 'controller') {
+                const controller = selectedElement.controller;
+                const activeJointNames = new Set(
+                    patcherEntries().slice(1)
+                        .filter(entry => entry.jointObj && entry.jointObj.joint_type !== 'fixed')
+                        .map(entry => entry.jointObj.joint_name)
+                );
+                const joints = (controller.joints || []).filter(name => activeJointNames.has(name));
+                const controllerColor = controller.color || CONTROLLER_PALETTE[0];
+                const controllerTypeLabel = (CONTROLLER_TYPES.find(option => option[0] === controller.type) || CONTROLLER_TYPES[0])[1];
+                const controllerSpecificHtml = controllerSpecificSettingsHtml(controller, joints);
+                body.innerHTML = `
+                    <div class="joint-selection-hero" style="border-left-color:${controllerColor};background:${controllerColorRgba(controllerColor, 0.14)};">
+                        <div>
+                            <strong>${escapeHtmlText(controller.name || 'controller')}</strong>
+                            <small>${escapeHtmlText(controllerTypeLabel)} · ${joints.length}개 조인트</small>
+                        </div>
+                    </div>
+                    <div class="joint-property-card">
+                        <div class="joint-property-title">Controller Properties</div>
+                        <section class="joint-property-section">
+                            ${controllerTypeEditorHtml(controller)}
+                        </section>
+                        <section class="joint-property-section">
+                            <div class="joint-property-section-title">GENERAL</div>
+                            <label style="font-size:9px;color:#9fadb4;">Name
+                                <input type="text" class="form-control"
+                                       value="${escapeHtmlText(controller.name || '')}"
+                                       onchange="updateSelectedControllerName(this.value)">
+                            </label>
+                            <div style="margin-top:9px;font-size:9px;color:#9fadb4;">Controlled Joints</div>
+                            <div class="parts-list" style="margin-top:4px;">
+                                ${joints.map(name => `<div>${escapeHtmlText(name)}</div>`).join('') || '<div>가동 조인트 없음</div>'}
+                            </div>
+                        </section>
+                        ${controllerSpecificHtml ? `<section class="joint-property-section">${controllerSpecificHtml}</section>` : ''}
+                    </div>
+                    <button type="button" class="form-control" onclick="deleteSelectedController()"
+                            style="cursor:pointer;margin-top:12px;border-color:#a94e5d;color:#ffd4da;background:#4b2028;">
+                        컨트롤러 테두리 해제
+                    </button>
+                `;
+            } else if (selectedElement.type === 'link') {
                 const node = selectedElement.node;
-                
-                let partsHtml = node.components.map((component, componentIndex) => `
-                    <div class="link-part-row">
-                        <span class="link-part-name" title="${escapeHtmlText(component)}">${escapeHtmlText(component)}</span>
+                const linkDisabled = isLinkDisabled(node);
+                const toggleBtnHtml = node === treeData ? '' : `
+                    <div class="form-group" style="margin-bottom: 12px;">
+                        <button type="button" class="form-control" onclick="toggleLinkActive(selectedElement.node)"
+                                style="cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;font-weight:bold;height:34px;
+                                       ${linkDisabled
+                                         ? 'border-color:#555e68;color:#cbd5e1;background:#262d35;'
+                                         : 'border-color:#22c55e;color:#e8fdf0;background:#143823;box-shadow:0 0 8px rgba(34,197,94,0.25);'}">
+                            <span class="patcher-node-toggle${linkDisabled ? ' is-disabled' : ''}" style="pointer-events:none;"><span class="toggle-knob"></span></span>
+                            <span>${linkDisabled ? '링크 비활성화됨 (클릭 시 활성화 및 3D 모델 표시)' : '링크 활성화 중 (클릭 시 비활성화 및 3D 모델 숨김)'}</span>
+                        </button>
+                    </div>
+                `;
+                const assignments = physicalMaterialAssignments();
+                let partsHtml = node.components.map((component, componentIndex) => {
+                    const materialKey = assignments[component] || '';
+                    return `
+                    <div class="component-material-row">
+                        <div class="component-material-copy">
+                            <strong title="${escapeHtmlText(component)}">${escapeHtmlText(component)}</strong>
+                            <small>${componentMaterialMassText(component, materialKey)}</small>
+                        </div>
+                        ${componentMaterialPickerHtml(component, materialKey)}
                         ${node.components.length > 1 ? `
                         <button type="button" class="link-part-remove"
                                 title="${escapeHtmlText(component)} 부품을 이 링크에서 분리"
@@ -8526,25 +12428,27 @@ HTML_CONTENT = """
                             ⊖
                         </button>` : ''}
                     </div>
-                `).join('');
+                `;}).join('');
                 let finalizeAlert = node.is_finalized ? 
                     `<div style="color:var(--accent-green); font-weight:bold; margin-bottom:10px;">✅ URDF 공식 링크로 확정됨</div>` : 
                     `<div style="color:#aaa; margin-bottom:10px;">⚠️ 아직 그룹화/확정되지 않은 부품</div>`;
                 
                 body.innerHTML = `
+                    ${toggleBtnHtml}
                     ${finalizeAlert}
                     <div class="form-group">
                         <label>대표 링크 이름 (URDF)</label>
                         <input type="text" class="form-control" value="${node.name}" onchange="updateNodeName('${node.name}', this.value)">
                     </div>
                     <div class="form-group">
-                        <label>통합된 퓨전 부품 목록 (${node.components.length}개)</label>
+                        <label>통합 부품 · 물리 재질 (${node.components.length}개)</label>
                         <div class="parts-list">${partsHtml}</div>
                     </div>
+                    ${componentMaterialEditorHtml(node)}
                     ${(node.components || []).length > 1 ? `
                     <button type="button" class="form-control"
                             onclick="ungroupPatcherLink(selectedElement.node)"
-                            style="cursor:pointer;border-color:#e6a23c;color:#ffe0ad;background:#4a3216;">
+                            style="cursor:pointer;margin-top:14px;border-color:#e6a23c;color:#ffe0ad;background:#4a3216;">
                         ↗ 이 링크 그룹 해제
                     </button>` : ''}
                 `;
@@ -8555,10 +12459,32 @@ HTML_CONTENT = """
                 ).join('');
 
                 const jointInfo = joint.joint_info || {};
+                joint.joint_info = jointInfo;
+                ensureJointCadTransformSnapshot(jointInfo);
                 const motionEditorHtml = selectedJointMotionEditorHtml(joint);
                 const groupCandidate = isPatcherGroupCandidate(joint);
                 const axisValues = jointInfo.axis || [0, 0, 1];
                 const rpyValues = jointInfo._manual_rpy || jointInfo.rpy || [0, 0, 0];
+                const xyzValues = Array.isArray(jointInfo.xyz) ? jointInfo.xyz : [0, 0, 0];
+                const parentLinkName = jointInfo.parent || '미연결';
+                const childLinkName = jointInfo.child || selectedElement.node?.name || '미연결';
+                const maxAcceleration = optionalJointNumberValue(jointInfo.max_acceleration);
+                const maxDeceleration = optionalJointNumberValue(jointInfo.max_deceleration);
+                const maxJerk = optionalJointNumberValue(jointInfo.max_jerk);
+                const damping = optionalJointNumberValue(jointInfo.damping);
+                const friction = optionalJointNumberValue(jointInfo.friction);
+                const mimicJoint = String(jointInfo.mimic_joint || '');
+                const mimicMultiplier = Number.isFinite(Number(jointInfo.mimic_multiplier)) ? Number(jointInfo.mimic_multiplier) : 1;
+                const mimicOffset = Number.isFinite(Number(jointInfo.mimic_offset)) ? Number(jointInfo.mimic_offset) : 0;
+                const commandInterface = ['position', 'velocity', 'effort'].includes(jointInfo.command_interface)
+                    ? jointInfo.command_interface : 'position';
+                const stateInterfaces = Array.isArray(jointInfo.state_interfaces)
+                    ? jointInfo.state_interfaces : ['position'];
+                const mimicJointOptions = getFlatLinks(treeData, null, -1)
+                    .map(item => item.jointObj)
+                    .filter(candidate => candidate && candidate !== joint && candidate.joint_type !== 'fixed')
+                    .map(candidate => `<option value="${escapeHtmlText(candidate.joint_name)}" ${candidate.joint_name === mimicJoint ? 'selected' : ''}>${escapeHtmlText(candidate.joint_name)}</option>`)
+                    .join('');
                 const axisType = getPanelAxisType(axisValues);
                 const axisCandidates = jointInfo._axis_candidates || [];
                 const jointSnap = jointInfo._joint_snap || null;
@@ -8584,6 +12510,7 @@ HTML_CONTENT = """
                     `
                 ).join('');
                 const jointOriginToolsHtml = `
+                    <div class="joint-origin-toolbox">
                     <div class="hint-box green" style="margin-bottom:8px;">
                         <strong>조인트 원점·축 재설정</strong><br>
                         <span id="joint-origin-pick-help">${jointSnapSummary}</span>
@@ -8635,10 +12562,65 @@ HTML_CONTENT = """
                             🌐 전체 부품 보기
                         </button>
                     </div>
+                    </div>
+                `;
+
+                const jointDisabled = isJointDisabled(joint);
+                const jointToggleBtnHtml = `
+                    <div class="form-group" style="margin-bottom: 12px;">
+                        <button type="button" class="form-control" onclick="toggleJointActive(selectedElement.jointObj)"
+                                style="cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;font-weight:bold;height:34px;
+                                       ${jointDisabled
+                                         ? 'border-color:#555e68;color:#cbd5e1;background:#262d35;'
+                                         : 'border-color:#22c55e;color:#e8fdf0;background:#143823;box-shadow:0 0 8px rgba(34,197,94,0.25);'}">
+                            <span class="patcher-node-toggle${jointDisabled ? ' is-disabled' : ''}" style="pointer-events:none;"><span class="toggle-knob"></span></span>
+                            <span>${jointDisabled ? '조인트 비활성화됨 (클릭 시 활성화 및 3D 모델 표시)' : '조인트 활성화 중 (클릭 시 비활성화 및 3D 모델 숨김)'}</span>
+                        </button>
+                    </div>
                 `;
 
                 body.innerHTML = `
                     ${jointOriginToolsHtml}
+                    ${jointToggleBtnHtml}
+                    <div class="joint-selection-hero">
+                        <span class="joint-selection-badge">JOINT</span>
+                        <strong>${escapeHtmlText(joint.joint_name)}</strong>
+                        <small>${escapeHtmlText(parentLinkName)} → ${escapeHtmlText(childLinkName)} · ${escapeHtmlText(joint.joint_type)}</small>
+                    </div>
+                    <div class="joint-property-card">
+                        <div class="joint-property-title">Joint Properties</div>
+                        <section class="joint-property-section">
+                            <div class="joint-property-section-title">GENERAL</div>
+                            <div class="joint-property-grid">
+                                <label>Name
+                                    <input type="text" class="form-control" value="${escapeHtmlText(joint.joint_name)}"
+                                           onchange="updateJointName('${escapeHtmlText(joint.joint_name)}', this.value)">
+                                </label>
+                                <span class="joint-general-spacer" aria-hidden="true"></span>
+                                <label>Parent<div class="joint-property-readonly" title="${escapeHtmlText(parentLinkName)}">${escapeHtmlText(parentLinkName)}</div></label>
+                                <label>Child<div class="joint-property-readonly" title="${escapeHtmlText(childLinkName)}">${escapeHtmlText(childLinkName)}</div></label>
+                            </div>
+                        </section>
+                        <section class="joint-property-section">
+                            <div class="joint-property-section-title">ORIGIN</div>
+                            <div class="joint-property-grid three">
+                                ${['X', 'Y', 'Z'].map((label, axisIndex) => `
+                                <label>${label} · m
+                                    <input class="form-control" type="number" step="0.001" value="${Number(xyzValues[axisIndex] || 0)}"
+                                           onchange="updateJointXyzVal('${escapeHtmlText(joint.joint_name)}', ${axisIndex}, this.value)">
+                                </label>`).join('')}
+                            </div>
+                            <div class="joint-property-grid three" style="margin-top:6px;">
+                                ${['R', 'P', 'Y'].map((label, axisIndex) => `
+                                <label>${label} · deg
+                                    <input class="form-control" type="number" step="1" value="${(Number(rpyValues[axisIndex] || 0) * 180 / Math.PI).toFixed(1)}"
+                                           onchange="updateJointRpyVal('${escapeHtmlText(joint.joint_name)}', ${axisIndex}, this.value)">
+                                </label>`).join('')}
+                            </div>
+                            <button type="button" class="form-control joint-cad-transform-button"
+                                    onclick="restoreSelectedJointCadTransform()">↺ CAD Transform 사용</button>
+                        </section>
+                    </div>
                     ${groupCandidate ? `
                     <div class="hint-box green" style="margin-bottom:12px;">
                         🧲 이 연결은 IAM 배치 보존용 묶음 후보입니다.<br>
@@ -8649,11 +12631,7 @@ HTML_CONTENT = """
                         ⚙️ 이 연결을 실제 조인트로 사용
                     </button>` : ''}
                     <div class="form-group">
-                        <label>조인트 이름</label>
-                        <input type="text" class="form-control" value="${joint.joint_name}" onchange="updateJointName('${joint.joint_name}', this.value)">
-                    </div>
-                    <div class="form-group">
-                        <label>동작 메커니즘 (Type)</label>
+                        <label>MECHANISM · Joint Type</label>
                         <select class="form-control" onchange="updateJointType('${joint.joint_name}', this.value)">
                             ${optionsHtml}
                         </select>
@@ -8685,14 +12663,70 @@ HTML_CONTENT = """
                         </select>
                     </div>` : ''}
                     `}
-                    <div class="form-group">
-                        <label>조인트 원점 회전 RPY (deg)</label>
-                        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">
-                            <input class="form-control" type="number" step="1" value="${(rpyValues[0] * 180 / Math.PI).toFixed(1)}" onchange="updateJointRpyVal('${joint.joint_name}', 0, this.value)" title="rx">
-                            <input class="form-control" type="number" step="1" value="${(rpyValues[1] * 180 / Math.PI).toFixed(1)}" onchange="updateJointRpyVal('${joint.joint_name}', 1, this.value)" title="ry">
-                            <input class="form-control" type="number" step="1" value="${(rpyValues[2] * 180 / Math.PI).toFixed(1)}" onchange="updateJointRpyVal('${joint.joint_name}', 2, this.value)" title="rz">
+                    ${joint.joint_type === 'fixed' ? '' : `
+                    <details class="joint-property-details">
+                        <summary>Advanced · 가감속 및 Jerk</summary>
+                        <div class="joint-property-details-body joint-property-grid three">
+                            <label>Acceleration
+                                <input class="form-control" type="number" min="0" step="0.1" value="${maxAcceleration}"
+                                       placeholder="미지정" onchange="updateOptionalJointNumber('max_acceleration', this, true)">
+                            </label>
+                            <label>Deceleration
+                                <input class="form-control" type="number" min="0" step="0.1" value="${maxDeceleration}"
+                                       placeholder="미지정" onchange="updateOptionalJointNumber('max_deceleration', this, true)">
+                            </label>
+                            <label>Jerk
+                                <input class="form-control" type="number" min="0" step="0.1" value="${maxJerk}"
+                                       placeholder="미지정" onchange="updateOptionalJointNumber('max_jerk', this, true)">
+                            </label>
                         </div>
-                    </div>
+                    </details>
+                    <details class="joint-property-details">
+                        <summary>DYNAMICS</summary>
+                        <div class="joint-property-details-body joint-property-grid">
+                            <label>Damping
+                                <input class="form-control" type="number" min="0" step="0.01" value="${damping}"
+                                       placeholder="미지정" onchange="updateOptionalJointNumber('damping', this, false)">
+                            </label>
+                            <label>Friction
+                                <input class="form-control" type="number" min="0" step="0.01" value="${friction}"
+                                       placeholder="미지정" onchange="updateOptionalJointNumber('friction', this, false)">
+                            </label>
+                        </div>
+                    </details>
+                    <details class="joint-property-details">
+                        <summary>MIMIC</summary>
+                        <div class="joint-property-details-body">
+                            <label style="font-size:9px;color:#9fadb4;">Mimic Joint
+                                <select class="form-control" onchange="updateSelectedJointTextValue('mimic_joint', this.value)">
+                                    <option value="">None</option>${mimicJointOptions}
+                                </select>
+                            </label>
+                            <div class="joint-property-grid" style="margin-top:6px;">
+                                <label>Multiplier
+                                    <input class="form-control" type="number" step="0.1" value="${mimicMultiplier}"
+                                           onchange="updateOptionalJointNumber('mimic_multiplier', this, false, 1)">
+                                </label>
+                                <label>Offset
+                                    <input class="form-control" type="number" step="0.1" value="${mimicOffset}"
+                                           onchange="updateOptionalJointNumber('mimic_offset', this, false, 0)">
+                                </label>
+                            </div>
+                        </div>
+                    </details>
+                    <div class="joint-property-card" style="margin-top:8px;">
+                        <div class="joint-property-section-title">CONTROL</div>
+                        <label style="font-size:9px;color:#9fadb4;">Command Interface
+                            <select class="form-control" onchange="updateSelectedJointTextValue('command_interface', this.value)">
+                                ${['position', 'velocity', 'effort'].map(value => `<option value="${value}" ${value === commandInterface ? 'selected' : ''}>${value}</option>`).join('')}
+                            </select>
+                        </label>
+                        <div class="joint-interface-checks">
+                            ${['position', 'velocity', 'effort'].map(value => `
+                            <label><input type="checkbox" ${stateInterfaces.includes(value) ? 'checked' : ''}
+                                          onchange="updateJointStateInterface('${value}', this.checked)"> ${value}</label>`).join('')}
+                        </div>
+                    </div>`}
                     ${groupCandidate ? '' : `<button type="button" class="form-control" onclick="disconnectSelectedJoint()"
                             style="cursor:pointer;border-color:#9b5a32;color:#ffd0b0;background:#4a2418;">
                         ✂ 이 조인트 배선 끊기
@@ -8784,20 +12818,48 @@ HTML_CONTENT = """
                 renameLinkNode(selectedElement.node, newName);
             }
         }
-        function updateJointName(oldName, newName) { saveState(); selectedElement.jointObj.joint_name = newName; previewControlsDirty = true; render(); }
-        function updateJointType(jName, newType) {
+        function updateJointName(oldName, newName) {
             saveState();
-            selectedElement.jointObj.joint_type = newType;
-            selectedElement.jointObj.joint_info = selectedElement.jointObj.joint_info || {};
-            selectedElement.jointObj.joint_info.provenance = 'user_tree_joint';
-            selectedElement.jointObj.joint_info.type = newType;
-            if (newType === 'continuous') {
-                delete selectedElement.jointObj.joint_info._manual_limit_lower_set;
-                delete selectedElement.jointObj.joint_info._manual_limit_upper_set;
-            }
-            ensureJointMotionLimits(newType, selectedElement.jointObj.joint_info);
-            previewRigDirty = true;
+            robotControllers().forEach(controller => {
+                controller.joints = (controller.joints || []).map(
+                    name => name === oldName ? newName : name
+                );
+            });
+            selectedElement.jointObj.joint_name = newName;
+            previewControlsDirty = true;
             render();
+        }
+        function updateJointType(jName, newType) {
+            if (!selectedElement?.jointObj || selectedElement.jointObj.joint_name !== jName) return;
+            saveState();
+            const joint = selectedElement.jointObj;
+            const jointInfo = joint.joint_info || {};
+            joint.joint_info = jointInfo;
+
+            // Changing only the URDF motion type must not discard a frame that
+            // the user already picked in 3D.  In particular, keep the world
+            // snap frame, its local xyz/rpy projection and the picked axis as
+            // one unit while the preview controller is rebuilt.
+            const pickedFrame = capturePickedJointFrame(jointInfo);
+            joint.joint_type = newType;
+            jointInfo.type = newType;
+            if (newType === 'continuous') {
+                delete jointInfo._manual_limit_lower_set;
+                delete jointInfo._manual_limit_upper_set;
+            }
+            ensureJointMotionLimits(newType, jointInfo);
+            restorePickedJointFrame(jointInfo, pickedFrame);
+            if (!pickedFrame) jointInfo.provenance = 'user_tree_joint';
+
+            previewRigDirty = true;
+            previewControlsDirty = true;
+            if (previewRigReady && robotRoot) {
+                refreshPreviewRig();
+                render({ skipPreview: true });
+                updateSelectedJointFrameVisibility();
+            } else {
+                render();
+            }
         }
 
         function activateSelectedJoint() {
@@ -8820,6 +12882,138 @@ HTML_CONTENT = """
             if (x === 0 && y === 0 && z === 1) return 'z';
             if (x === 0 && y === 0 && z === -1) return 'nz';
             return 'custom';
+        }
+
+        function cloneJointSetting(value) {
+            if (value === undefined) return undefined;
+            return JSON.parse(JSON.stringify(value));
+        }
+
+        function capturePickedJointFrame(jointInfo) {
+            if (!jointInfo) return null;
+            const hasPickedFrame = jointInfo.provenance === 'user_3d_joint_pick'
+                || jointInfo._joint_snap
+                || (
+                    Array.isArray(jointInfo._preview_world_frame_matrix)
+                    && jointInfo._preview_world_frame_matrix.length === 16
+                );
+            if (!hasPickedFrame) return null;
+            const snapshot = {};
+            [
+                'xyz', 'rpy', '_manual_rpy', 'axis', '_axis_source',
+                '_preview_world_frame_matrix', '_preview_world_xyz',
+                '_preview_world_quaternion', '_preview_local_quaternion',
+                '_joint_snap', '_joint_mates', 'provenance'
+            ].forEach(key => {
+                if (jointInfo[key] !== undefined) {
+                    snapshot[key] = cloneJointSetting(jointInfo[key]);
+                }
+            });
+            return snapshot;
+        }
+
+        function restorePickedJointFrame(jointInfo, snapshot) {
+            if (!jointInfo || !snapshot) return;
+            Object.entries(snapshot).forEach(([key, value]) => {
+                jointInfo[key] = cloneJointSetting(value);
+            });
+        }
+
+        function ensureJointCadTransformSnapshot(jointInfo) {
+            if (!jointInfo || jointInfo._cad_transform_snapshot) return;
+            const snapshot = {};
+            [
+                'xyz', 'rpy', '_manual_rpy', '_joint_world_matrix',
+                '_preview_world_frame_matrix', '_preview_world_xyz',
+                '_preview_world_quaternion', '_preview_local_quaternion'
+            ].forEach(key => {
+                if (jointInfo[key] !== undefined) snapshot[key] = cloneJointSetting(jointInfo[key]);
+            });
+            jointInfo._cad_transform_snapshot = snapshot;
+        }
+
+        function optionalJointNumberValue(value) {
+            return Number.isFinite(Number(value)) && value !== '' && value !== null
+                ? Number(value) : '';
+        }
+
+        function updateJointXyzVal(jName, axisIndex, rawValue) {
+            if (!selectedElement?.jointObj || selectedElement.jointObj.joint_name !== jName) return;
+            const value = Number(rawValue);
+            if (!Number.isFinite(value)) return;
+            saveState();
+            const jointInfo = selectedElement.jointObj.joint_info || {};
+            selectedElement.jointObj.joint_info = jointInfo;
+            ensureJointCadTransformSnapshot(jointInfo);
+            const xyz = Array.isArray(jointInfo.xyz) ? jointInfo.xyz.slice() : [0, 0, 0];
+            xyz[Number(axisIndex)] = value;
+            jointInfo.xyz = xyz;
+            delete jointInfo._joint_world_matrix;
+            delete jointInfo._preview_world_frame_matrix;
+            delete jointInfo._preview_world_xyz;
+            jointInfo.provenance = 'user_joint_origin';
+            previewRigDirty = true;
+            render();
+        }
+
+        function restoreSelectedJointCadTransform() {
+            if (!selectedElement?.jointObj) return;
+            const jointInfo = selectedElement.jointObj.joint_info || {};
+            const snapshot = jointInfo._cad_transform_snapshot;
+            if (!snapshot) return;
+            saveState();
+            [
+                'xyz', 'rpy', '_manual_rpy', '_joint_world_matrix',
+                '_preview_world_frame_matrix', '_preview_world_xyz',
+                '_preview_world_quaternion', '_preview_local_quaternion'
+            ].forEach(key => delete jointInfo[key]);
+            Object.entries(snapshot).forEach(([key, value]) => jointInfo[key] = cloneJointSetting(value));
+            jointInfo.provenance = 'cad_transform_restored';
+            previewRigDirty = true;
+            render();
+        }
+
+        function updateOptionalJointNumber(field, input, positiveOnly = false, fallback = undefined) {
+            if (!selectedElement?.jointObj || !input) return;
+            const raw = String(input.value || '').trim();
+            const jointInfo = selectedElement.jointObj.joint_info || {};
+            let value = raw === '' ? fallback : Number(raw);
+            const invalid = value !== undefined && (
+                !Number.isFinite(value) || (positiveOnly ? value <= 0 : value < 0)
+            );
+            input.setCustomValidity(invalid ? (positiveOnly ? '0보다 큰 값을 입력하세요.' : '0 이상의 값을 입력하세요.') : '');
+            if (invalid) return input.reportValidity();
+            saveState();
+            if (value === undefined) delete jointInfo[field];
+            else jointInfo[field] = value;
+            selectedElement.jointObj.joint_info = jointInfo;
+            jointInfo.provenance = 'user_joint_properties';
+            render({ skipPreview: true });
+        }
+
+        function updateSelectedJointTextValue(field, value) {
+            if (!selectedElement?.jointObj) return;
+            saveState();
+            const jointInfo = selectedElement.jointObj.joint_info || {};
+            selectedElement.jointObj.joint_info = jointInfo;
+            if (value) jointInfo[field] = value;
+            else delete jointInfo[field];
+            jointInfo.provenance = 'user_joint_properties';
+            render({ skipPreview: true });
+        }
+
+        function updateJointStateInterface(interfaceName, enabled) {
+            if (!selectedElement?.jointObj) return;
+            saveState();
+            const jointInfo = selectedElement.jointObj.joint_info || {};
+            const values = new Set(Array.isArray(jointInfo.state_interfaces)
+                ? jointInfo.state_interfaces : ['position']);
+            if (enabled) values.add(interfaceName);
+            else values.delete(interfaceName);
+            jointInfo.state_interfaces = ['position', 'velocity', 'effort'].filter(value => values.has(value));
+            selectedElement.jointObj.joint_info = jointInfo;
+            jointInfo.provenance = 'user_joint_control';
+            render({ skipPreview: true });
         }
 
         function updateJointUrdfValue(jName, field, input) {
@@ -8873,10 +13067,10 @@ HTML_CONTENT = """
         }
 
         function updateJointAxisType(jName, type) {
-            saveState();
-            const joint = selectedElement.jointObj;
-            const jointInfo = joint.joint_info || {};
-            joint.joint_info = jointInfo;
+            const joint = (selectedElement && selectedElement.jointObj && selectedElement.jointObj.joint_name === jName)
+                ? selectedElement.jointObj
+                : getFlatLinks(treeData, null, -1).map(item => item.jointObj).find(item => item && item.joint_name === jName);
+            if (!joint) return;
             let axis = [0, 0, 1];
             if (type === 'x') axis = [1, 0, 0];
             else if (type === 'nx') axis = [-1, 0, 0];
@@ -8884,38 +13078,30 @@ HTML_CONTENT = """
             else if (type === 'ny') axis = [0, -1, 0];
             else if (type === 'z') axis = [0, 0, 1];
             else if (type === 'nz') axis = [0, 0, -1];
-            else axis = jointInfo.axis || [1, 0, 0];
-            
-            jointInfo.axis = axis;
-            previewRigDirty = true;
-            render();
+            else axis = (joint.joint_info && joint.joint_info.axis) || [1, 0, 0];
+            applyJointAxisChange(joint, axis, `user_axis_${type}`);
         }
 
         function updateJointAxisVal(jName, dim, val) {
-            saveState();
-            const joint = selectedElement.jointObj;
-            const jointInfo = joint.joint_info || {};
-            joint.joint_info = jointInfo;
-            const axis = jointInfo.axis || [0, 0, 1];
+            const joint = (selectedElement && selectedElement.jointObj && selectedElement.jointObj.joint_name === jName)
+                ? selectedElement.jointObj
+                : getFlatLinks(treeData, null, -1).map(item => item.jointObj).find(item => item && item.joint_name === jName);
+            if (!joint) return;
+            const axis = ((joint.joint_info && joint.joint_info.axis) || [0, 0, 1]).slice();
             if (dim === 'x') axis[0] = Number(val);
             else if (dim === 'y') axis[1] = Number(val);
             else if (dim === 'z') axis[2] = Number(val);
-            jointInfo.axis = axis;
-            previewRigDirty = true;
-            render();
+            applyJointAxisChange(joint, axis, 'user_custom_axis');
         }
 
         function updateJointAxisCandidate(jName, candidateIndex) {
-            saveState();
-            const joint = selectedElement.jointObj;
-            const jointInfo = joint.joint_info || {};
-            joint.joint_info = jointInfo;
-            const candidate = (jointInfo._axis_candidates || [])[Number(candidateIndex)];
+            const joint = (selectedElement && selectedElement.jointObj && selectedElement.jointObj.joint_name === jName)
+                ? selectedElement.jointObj
+                : getFlatLinks(treeData, null, -1).map(item => item.jointObj).find(item => item && item.joint_name === jName);
+            if (!joint || !joint.joint_info) return;
+            const candidate = (joint.joint_info._axis_candidates || [])[Number(candidateIndex)];
             if (!candidate) return;
-            jointInfo.axis = candidate.axis.slice();
-            jointInfo._axis_source = candidate.label;
-            previewRigDirty = true;
-            render();
+            applyJointAxisChange(joint, candidate.axis.slice(), candidate.label);
         }
 
         function updateJointRpyVal(jName, axisIndex, degrees) {
@@ -8924,6 +13110,7 @@ HTML_CONTENT = """
             const joint = selectedElement.jointObj;
             const jointInfo = joint.joint_info || {};
             joint.joint_info = jointInfo;
+            ensureJointCadTransformSnapshot(jointInfo);
             const rpy = (jointInfo._manual_rpy || jointInfo.rpy || [0, 0, 0]).slice();
             rpy[Number(axisIndex)] = Number(degrees) * Math.PI / 180;
             jointInfo._manual_rpy = rpy;
@@ -8956,7 +13143,7 @@ HTML_CONTENT = """
                 if (status) {
                     const problems = [];
                     if (!graphValidation.worldConnected) {
-                        problems.push('WORLD를 사용할 루트 링크에 연결하세요');
+                        problems.push('기준 프레임을 사용할 루트 링크에 연결하세요');
                     }
                     if (graphValidation.disconnected.length) {
                         problems.push(`미연결 링크 ${graphValidation.disconnected.length}개를 배선하거나 병합하세요`);
@@ -9072,6 +13259,7 @@ HTML_CONTENT = """
                 updateWslRvizStatus(data.message || 'WSL 상태를 확인하고 있습니다.');
                 if (
                     data.status === 'preparing' ||
+                    data.status === 'launching' ||
                     data.status === 'idle' ||
                     data.status === 'stopping'
                 ) {
@@ -9090,15 +13278,14 @@ HTML_CONTENT = """
                     const stopButton = document.getElementById('wsl-rviz-stop-button');
                     if (stopButton) stopButton.style.display = 'none';
                 } else if (data.status === 'error') {
-                    const detail = Array.isArray(data.output) && data.output.length
-                        ? ` · ${data.output[data.output.length - 1]}`
-                        : '';
-                    updateWslRvizStatus(`${data.message || 'RViz 실행 실패'}${detail}`, true);
+                    updateWslRvizStatus(data.message || 'RViz 실행 실패', true);
                     const button = document.getElementById('wsl-rviz-button');
                     if (button) {
-                        button.disabled = false;
-                        button.textContent = 'RViz 다시 열기';
+                        button.disabled = Boolean(data.process_running);
+                        button.textContent = data.process_running ? 'RViz 종료 후 다시 열기' : 'RViz 다시 열기';
                     }
+                    const stopButton = document.getElementById('wsl-rviz-stop-button');
+                    if (stopButton) stopButton.style.display = data.process_running ? 'inline-block' : 'none';
                 }
             } catch (error) {
                 updateWslRvizStatus(`상태 확인 실패: ${error.message}`, true);
@@ -9300,6 +13487,7 @@ HTML_CONTENT = """
             const payload = {
                 tree: treeData,
                 fix_to_world: document.getElementById('fix-to-world').checked,
+                root_joint_mode: rootJointMode(),
                 include_moveit: document.getElementById('export-mode')?.value === 'moveit'
             };
             

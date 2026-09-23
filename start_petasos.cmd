@@ -53,6 +53,11 @@ if not "%ERRORLEVEL%"=="0" (
     exit /b 1
 )
 
+if exist "%~dp0tools\stop_previous_petasos.ps1" (
+    echo Closing any previous Petasos server from this project.
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\stop_previous_petasos.ps1"
+)
+
 if exist "%~dp0tools\stop_petasos_wsl_gui.ps1" (
     echo Closing any previous Petasos RViz window.
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\stop_petasos_wsl_gui.ps1"

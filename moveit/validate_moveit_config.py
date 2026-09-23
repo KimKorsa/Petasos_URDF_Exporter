@@ -332,12 +332,44 @@ def repair_moveit_controller_actions(path: Path, fix: bool = False) -> dict:
     }
 
 
-def repair_ros2_command_interfaces(path: Path, fix: bool = False) -> dict:
+def repair_ros2_command_interfaces(
+    path: Path, fix: bool = False, urdf_path: Path | None = None
+) -> dict:
     path = Path(path)
     original = path.read_text(encoding="utf-8")
     lines = original.splitlines()
     invalid = []
     replacements: list[tuple[int, int, str]] = []
+    urdf_interfaces = {}
+    if urdf_path is not None:
+        root = ElementTree.parse(urdf_path).getroot()
+        for joint in root.findall("ros2_control/joint"):
+            name = joint.get("name")
+            if name:
+                urdf_interfaces[name] = {
+                    "command": {item.get("name") for item in joint.findall("command_interface")},
+                    "state": {item.get("name") for item in joint.findall("state_interface")},
+                }
+
+    def controller_joints(section_index: int) -> list[str]:
+        block_start = section_index
+        while block_start > 0 and not re.match(r"^[A-Za-z_][A-Za-z0-9_]*:\s*$", lines[block_start]):
+            block_start -= 1
+        block_end = block_start + 1
+        while block_end < len(lines) and not re.match(
+            r"^[A-Za-z_][A-Za-z0-9_]*:\s*$", lines[block_end]
+        ):
+            block_end += 1
+        for cursor in range(block_start, block_end):
+            if re.match(r"^    joints:\s*$", lines[cursor]):
+                names = []
+                for item in lines[cursor + 1:block_end]:
+                    match = re.match(r"^      -\s*([A-Za-z_][A-Za-z0-9_]*)", item)
+                    if not match:
+                        break
+                    names.append(match.group(1))
+                return names
+        return []
 
     index = 0
     while index < len(lines):
@@ -352,11 +384,12 @@ def repair_ros2_command_interfaces(path: Path, fix: bool = False) -> dict:
         indent_text = match.group("indent")
         indent = len(indent_text.expandtabs(2))
         section = match.group("section")
-        expected = (
-            ["position"]
-            if section == "command"
-            else ["position", "velocity"]
-        )
+        expected = ["position"] if section == "command" else ["position", "velocity"]
+        names = controller_joints(index)
+        if names and all(name in urdf_interfaces for name in names):
+            common = set.intersection(*(urdf_interfaces[name][section] for name in names))
+            supported = ("position", "velocity", "effort") if section == "command" else ("position", "velocity")
+            expected = [value for value in supported if value in common]
         inline = match.group("inline").strip()
         end = index + 1
         values = []
@@ -376,6 +409,18 @@ def repair_ros2_command_interfaces(path: Path, fix: bool = False) -> dict:
                 if item:
                     values.append(item.group(1))
                 end += 1
+        if section == "state" and not (names and all(name in urdf_interfaces for name in names)):
+            if values in (["position"], ["position", "velocity"]):
+                expected = values
+        if not expected:
+            invalid.append({
+                "line": index + 1,
+                "section": f"{section}_interfaces",
+                "interfaces": values,
+                "reason": "controller joints have no common URDF interface",
+            })
+            index = max(end, index + 1)
+            continue
         if values != expected:
             invalid.append({
                 "line": index + 1,
@@ -395,7 +440,7 @@ def repair_ros2_command_interfaces(path: Path, fix: bool = False) -> dict:
                 ),
             ]
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        return repair_ros2_command_interfaces(path, fix=False) | {
+        return repair_ros2_command_interfaces(path, fix=False, urdf_path=urdf_path) | {
             "repaired": invalid
         }
     return {
@@ -498,6 +543,7 @@ def validate_moveit_package(
     command_result = repair_ros2_command_interfaces(
         config_dir / "ros2_controllers.yaml",
         fix=fix,
+        urdf_path=urdf_path,
     )
     initial_result = None
     if urdf_path is not None:
@@ -526,8 +572,7 @@ def validate_moveit_package(
         )
     if not command_result["valid"]:
         errors.append(
-            "JointTrajectoryController interfaces must use position commands "
-            "and position/velocity states"
+            "JointTrajectoryController interfaces must match the URDF ros2_control joints"
         )
     if initial_result is not None and not initial_result["valid"]:
         errors.append(

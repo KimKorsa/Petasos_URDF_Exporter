@@ -6,7 +6,7 @@ import os
 import re
 import shutil
 from dataclasses import asdict, dataclass
-from hashlib import sha1
+from hashlib import sha1, sha256
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +46,8 @@ class ImportedPart:
     cad_source_file: str | None = None
     snap_source: str | None = None
     snap_features: list[dict[str, Any]] | None = None
+    assembly_path: list[str] | None = None
+    source_sha256: str | None = None
 
 
 def safe_name(value: str, fallback: str = "part") -> str:
@@ -56,6 +58,14 @@ def safe_name(value: str, fallback: str = "part") -> str:
     if cleaned[0].isdigit():
         cleaned = f"{fallback}_{cleaned}"
     return cleaned
+
+
+def _file_sha256(path: str) -> str:
+    digest = sha256()
+    with open(path, "rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _unique_name(candidate: str, used: set[str]) -> str:
@@ -414,6 +424,7 @@ def _load_mesh_physical(source_path: str, mesh_path: str) -> dict[str, Any]:
     inertia = (scaled.moment_inertia * DEFAULT_DENSITY_KG_M3)
     return {
         "mass": float(scaled.volume * DEFAULT_DENSITY_KG_M3),
+        "volume_m3": float(scaled.volume),
         "center_of_mass": [float(value) for value in scaled.center_mass],
         "inertia": [
             float(inertia[0, 0]), float(inertia[1, 1]), float(inertia[2, 2]),
@@ -475,6 +486,7 @@ def _load_cad_details(
     scale = DEFAULT_DENSITY_KG_M3 * 1e-15
     physical = {
         "mass": max(volume_mm3 * DEFAULT_DENSITY_KG_M3 * 1e-9, 1e-6),
+        "volume_m3": max(volume_mm3 * 1e-9, 1e-12),
         "center_of_mass": [
             float(center.X()) / 1000.0,
             float(center.Y()) / 1000.0,
@@ -731,6 +743,12 @@ def build_project(source_dir: str, mesh_dir: str, project_name: str) -> dict[str
             cad_source_file=cad_source_name,
             snap_source="opencascade" if snap_features else None,
             snap_features=snap_features,
+            assembly_path=(
+                [str(value) for value in spec.get("assembly_path", [])]
+                if isinstance(spec.get("assembly_path"), list)
+                else None
+            ),
+            source_sha256=_file_sha256(source_path),
         )
         parts.append(part)
         part_id_to_name[part_id] = name
@@ -899,6 +917,11 @@ def build_project(source_dir: str, mesh_dir: str, project_name: str) -> dict[str
         "_preview_units_per_meter": 1000.0,
         "_preview_up_axis": preview_up_axis,
         "_cad_snap_features": cad_snap_features,
+        "_mesh_revision": sha1(
+            "|".join(
+                f"{part.name}:{part.source_sha256 or ''}" for part in parts
+            ).encode("utf-8")
+        ).hexdigest()[:12],
         "_import_report": {
             "source_application": source_application,
             "parts": len(parts),

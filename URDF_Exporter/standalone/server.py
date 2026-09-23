@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import copy
 import json
 import os
 import re
@@ -32,6 +33,8 @@ from URDF_Exporter.standalone.importers import (
     build_project,
     safe_name,
 )
+from URDF_Exporter.standalone.reimporter import merge_reimported_state
+from URDF_Exporter.standalone.physical_materials import ensure_material_editor_data
 from moveit.wsl_runner import WslMoveItRunner
 
 
@@ -147,12 +150,22 @@ class WslRvizRunner:
                 "status": self._status,
                 "message": self._message,
                 "output": self._output[-20:],
+                "process_running": self._process is not None and self._process.poll() is None,
             }
 
     def _set_state(self, status: str, message: str) -> None:
         with self._lock:
             self._status = status
             self._message = message
+
+    @staticmethod
+    def _is_rviz_window_title(title: str) -> bool:
+        normalized = str(title or "").strip().lower()
+        return "rviz" in normalized
+
+    @staticmethod
+    def _is_wslg_copy_mode(title: str) -> bool:
+        return "[WARN:COPY MODE]" in str(title or "").upper()
 
     def _ensure_ros_ready(self) -> None:
         result = subprocess.run(
@@ -248,7 +261,8 @@ class WslRvizRunner:
                 if match:
                     with self._lock:
                         self._linux_pid = int(match.group(1))
-                self._set_state("running", "RViz가 Windows 화면에서 실행 중입니다.")
+                self._set_state("launching", "RViz 창이 열리기를 기다리고 있습니다.")
+                threading.Thread(target=self._bring_to_front, daemon=True).start()
 
         return_code = process.wait()
         with self._lock:
@@ -262,6 +276,65 @@ class WslRvizRunner:
                 self._status = "error"
                 phase = "RViz 실행" if launched else "동기화 또는 빌드"
                 self._message = f"{phase} 중 오류가 발생했습니다."
+
+    def _bring_to_front(self) -> None:
+        if os.name != "nt":
+            return
+        import time
+        # ros2 launch starts joint_state_publisher_gui before RViz.  The old
+        # implementation treated either window as success and stopped polling,
+        # so RViz could remain minimized/behind the browser on the taskbar.
+        # Wait specifically for the RViz top-level window instead.
+        for _ in range(40):
+            time.sleep(0.5)
+            try:
+                import ctypes
+                from ctypes import wintypes
+                user32 = ctypes.windll.user32
+                WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+                found = []
+
+                def enum_proc(hwnd, lParam):
+                    length = user32.GetWindowTextLengthW(hwnd)
+                    if length > 0:
+                        buff = ctypes.create_unicode_buffer(length + 1)
+                        user32.GetWindowTextW(hwnd, buff, length + 1)
+                        if self._is_rviz_window_title(buff.value):
+                            found.append((hwnd, buff.value))
+                    return True
+
+                user32.EnumWindows(WNDENUMPROC(enum_proc), 0)
+                if found:
+                    hwnd, title = found[0]
+                    if self._is_wslg_copy_mode(title):
+                        self._set_state(
+                            "error",
+                            "WSLg 화면 연결 오류로 RViz 창이 투명하게 표시됩니다. "
+                            "다른 WSL 작업을 저장한 뒤 PowerShell에서 wsl --shutdown을 실행하고 RViz를 다시 여세요.",
+                        )
+                        return
+                    user32.ShowWindowAsync(hwnd, 9)  # SW_RESTORE
+                    # SetForegroundWindow alone may be rejected when the
+                    # foreground belongs to a browser.  Briefly lifting the
+                    # window in Z order reliably reveals a WSLg/Qt window,
+                    # while immediately returning it to non-topmost state.
+                    swp_flags = 0x0001 | 0x0002 | 0x0040  # NOSIZE|NOMOVE|SHOWWINDOW
+                    user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, swp_flags)  # TOPMOST
+                    user32.SetWindowPos(hwnd, -2, 0, 0, 0, 0, swp_flags)  # NOTOPMOST
+                    user32.SetForegroundWindow(hwnd)
+                    self._set_state("running", "RViz 창을 Windows 화면에 표시했습니다.")
+                    return
+            except Exception:
+                return
+
+        with self._lock:
+            process_running = self._process is not None and self._process.poll() is None
+        if process_running:
+            self._set_state(
+                "error",
+                "RViz 프로세스는 실행 중이지만 Windows 창을 확인하지 못했습니다. "
+                "WSLg 상태를 확인하거나 다른 WSL 작업을 저장한 뒤 wsl --shutdown을 실행해 주세요.",
+            )
 
     def start(self, package_dir: Path) -> dict:
         package_dir = Path(package_dir).resolve()
@@ -287,6 +360,8 @@ class WslRvizRunner:
 set -eo pipefail
 trap 'rm -f -- "$0"' EXIT
 source /opt/ros/humble/setup.bash
+export LIBGL_ALWAYS_SOFTWARE=1
+export OGRE_RTT_MODE=Copy
 workspace="$HOME/petasos_ros2_ws"
 target="$workspace/src/{package_name}"
 runtime_dir="$workspace/.petasos_runtime"
@@ -485,7 +560,9 @@ class ProjectStore:
         }
 
     def tree(self) -> dict:
-        return self.state["tree"] if self.state else self.empty_tree()
+        if not self.state:
+            return self.empty_tree()
+        return ensure_material_editor_data(self.state)
 
     def _write_current_state(self) -> Path:
         assert self.state is not None
@@ -524,6 +601,16 @@ class ProjectStore:
         if isinstance(editor_settings, dict):
             tree["_editor_settings"] = {
                 "fix_to_world": bool(editor_settings.get("fix_to_world", True)),
+                "root_joint_mode": (
+                    editor_settings.get("root_joint_mode")
+                    if editor_settings.get("root_joint_mode")
+                    in {"world", "base_footprint", "none"}
+                    else (
+                        "world"
+                        if editor_settings.get("fix_to_world", True)
+                        else "none"
+                    )
+                ),
                 "export_mode": (
                     "moveit"
                     if editor_settings.get("export_mode") == "moveit"
@@ -694,11 +781,7 @@ class ProjectStore:
         self.last_project_file.write_text(str(project_dir), encoding="utf-8")
         return state
 
-    def import_files(self, project_name: str, uploads, relative_uploads=None) -> dict:
-        project_name, project_dir, staging_dir, source_dir, mesh_dir = self._begin_import(
-            project_name
-        )
-
+    def _save_import_uploads(self, source_dir: Path, uploads, relative_uploads=None) -> int:
         saved = 0
         upload_groups = [
             (uploads, False),
@@ -725,6 +808,14 @@ class ProjectStore:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 upload.save(target)
                 saved += 1
+        return saved
+
+    def import_files(self, project_name: str, uploads, relative_uploads=None) -> dict:
+        project_name, project_dir, staging_dir, source_dir, mesh_dir = self._begin_import(
+            project_name
+        )
+
+        saved = self._save_import_uploads(source_dir, uploads, relative_uploads)
         if saved == 0:
             shutil.rmtree(staging_dir, ignore_errors=True)
             raise ImportFailure("지원되는 파일이 선택되지 않았습니다.")
@@ -732,6 +823,44 @@ class ProjectStore:
         try:
             state = build_project(str(source_dir), str(mesh_dir), project_name)
             return self._commit_import(state, project_dir, staging_dir)
+        except Exception:
+            shutil.rmtree(staging_dir, ignore_errors=True)
+            raise
+
+    def reimport_files(self, uploads, edited_tree: dict, relative_uploads=None) -> dict:
+        if not self.state or not self.project_dir:
+            raise ImportFailure("먼저 업데이트할 CAD 조립품을 불러와야 합니다.")
+        if not isinstance(edited_tree, dict) or not edited_tree.get("name"):
+            raise ImportFailure("보존할 현재 편집 데이터가 올바르지 않습니다.")
+
+        previous_state = copy.deepcopy(self.state)
+        project_name = str(
+            previous_state.get("project_name")
+            or edited_tree.get("_project_name")
+            or self.project_dir.name
+        )
+        project_dir = self.project_dir
+        staging_dir = project_dir / ".reimport_staging"
+        if staging_dir.is_dir():
+            shutil.rmtree(staging_dir)
+        source_dir = staging_dir / "sources"
+        mesh_dir = staging_dir / "meshes"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        mesh_dir.mkdir(parents=True, exist_ok=True)
+
+        saved = self._save_import_uploads(source_dir, uploads, relative_uploads)
+        if saved == 0:
+            shutil.rmtree(staging_dir, ignore_errors=True)
+            raise ImportFailure("업데이트할 STEP 또는 CAD 파일이 선택되지 않았습니다.")
+
+        try:
+            fresh_state = build_project(str(source_dir), str(mesh_dir), project_name)
+            merged_state = merge_reimported_state(
+                previous_state,
+                fresh_state,
+                edited_tree,
+            )
+            return self._commit_import(merged_state, project_dir, staging_dir)
         except Exception:
             shutil.rmtree(staging_dir, ignore_errors=True)
             raise
@@ -769,14 +898,84 @@ class ProjectStore:
             shutil.rmtree(staging_dir, ignore_errors=True)
             raise
 
+    def _reimport_from_inventor(self, edited_tree: dict, converter) -> dict:
+        if not self.state or not self.project_dir:
+            raise ImportFailure("먼저 업데이트할 Inventor 조립품을 불러와야 합니다.")
+        if not isinstance(edited_tree, dict) or not edited_tree.get("name"):
+            raise ImportFailure("보존할 현재 편집 데이터가 올바르지 않습니다.")
+
+        previous_state = copy.deepcopy(self.state)
+        project_name = str(
+            previous_state.get("project_name")
+            or edited_tree.get("_project_name")
+            or self.project_dir.name
+        )
+        project_dir = self.project_dir
+        staging_dir = project_dir / ".reimport_staging"
+        if staging_dir.is_dir():
+            shutil.rmtree(staging_dir)
+        source_dir = staging_dir / "sources"
+        mesh_dir = staging_dir / "meshes"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        mesh_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            converter(source_dir, project_name)
+            fresh_state = build_project(str(source_dir), str(mesh_dir), project_name)
+            merged_state = merge_reimported_state(
+                previous_state,
+                fresh_state,
+                edited_tree,
+            )
+            return self._commit_import(merged_state, project_dir, staging_dir)
+        except InventorAdapterError as exc:
+            shutil.rmtree(staging_dir, ignore_errors=True)
+            raise ImportFailure(str(exc)) from exc
+        except Exception:
+            shutil.rmtree(staging_dir, ignore_errors=True)
+            raise
+
+    def reimport_active_inventor(self, edited_tree: dict) -> dict:
+        return self._reimport_from_inventor(
+            edited_tree,
+            lambda source_dir, project_name: convert_active_inventor(
+                source_dir,
+                project_name,
+            ),
+        )
+
+    def reimport_inventor_path(
+        self,
+        assembly_path: Path,
+        edited_tree: dict,
+    ) -> dict:
+        assembly_path = Path(assembly_path)
+        if not assembly_path.is_file():
+            raise ImportFailure(f"원본 조립품 파일을 찾을 수 없습니다: {assembly_path}")
+        return self._reimport_from_inventor(
+            edited_tree,
+            lambda source_dir, project_name: convert_with_inventor(
+                assembly_path,
+                source_dir,
+                project_name,
+            ),
+        )
+
     def export(
         self,
         tree: dict,
         fix_to_world: bool,
         include_moveit: bool = False,
+        root_joint_mode: str | None = None,
     ) -> dict:
         if not self.state or not self.project_dir:
             raise ImportFailure("먼저 조립품을 불러와야 합니다.")
+        if root_joint_mode == "base_footprint" and not tree.get("_base_footprint_frame"):
+            tree["_base_footprint_frame"] = {
+                "world_xyz": [0.0, 0.0, 0.0],
+                "rpy": [0.0, 0.0, 0.0],
+                "yaw": 0.0,
+            }
         result = export_project(
             self.state,
             tree,
@@ -784,6 +983,7 @@ class ProjectStore:
             str(self.project_dir),
             include_moveit=include_moveit,
             output_root=str(self.export_root),
+            root_joint_mode=root_joint_mode,
         )
         self.state["tree"] = tree
         (self.project_dir / "project_state.json").write_text(
@@ -890,6 +1090,30 @@ def create_app(store: ProjectStore | None = None) -> Flask:
         except Exception as exc:
             return jsonify({"error": f"가져오기 실패: {exc}"}), 500
 
+    @app.post("/reimport")
+    def reimport_files():
+        try:
+            raw_tree = request.form.get("tree", "")
+            try:
+                edited_tree = json.loads(raw_tree)
+            except json.JSONDecodeError as exc:
+                raise ImportFailure("보존할 현재 편집 데이터를 읽지 못했습니다.") from exc
+            state = project_store.reimport_files(
+                request.files.getlist("files"),
+                edited_tree,
+                request.files.getlist("relative_files"),
+            )
+            return jsonify({
+                "status": "reimported",
+                "project_name": state["project_name"],
+                "report": state["report"],
+                "reimport": state["report"].get("reimport", {}),
+            })
+        except ImportFailure as exc:
+            return jsonify({"error": str(exc)}), 400
+        except Exception as exc:
+            return jsonify({"error": f"CAD 업데이트 실패: {exc}"}), 500
+
     @app.post("/import/inventor-active")
     def import_inventor_active():
         payload = request.get_json(silent=True) or {}
@@ -929,6 +1153,45 @@ def create_app(store: ProjectStore | None = None) -> Flask:
         except Exception as exc:
             return jsonify({"error": f"원본 IAM 가져오기 실패: {exc}"}), 500
 
+    @app.post("/reimport/inventor-active")
+    def reimport_inventor_active():
+        payload = request.get_json(silent=True) or {}
+        try:
+            state = project_store.reimport_active_inventor(payload.get("tree") or {})
+            return jsonify({
+                "status": "reimported",
+                "project_name": state["project_name"],
+                "report": state["report"],
+                "reimport": state["report"].get("reimport", {}),
+            })
+        except ImportFailure as exc:
+            return jsonify({"error": str(exc)}), 400
+        except Exception as exc:
+            return jsonify({"error": f"현재 Inventor 업데이트 실패: {exc}"}), 500
+
+    @app.post("/reimport/inventor-file")
+    def reimport_inventor_file():
+        payload = request.get_json(silent=True) or {}
+        try:
+            assembly_path = _choose_inventor_file()
+            if assembly_path is None:
+                return jsonify({"status": "cancelled"})
+            state = project_store.reimport_inventor_path(
+                assembly_path,
+                payload.get("tree") or {},
+            )
+            return jsonify({
+                "status": "reimported",
+                "project_name": state["project_name"],
+                "source_path": str(assembly_path),
+                "report": state["report"],
+                "reimport": state["report"].get("reimport", {}),
+            })
+        except ImportFailure as exc:
+            return jsonify({"error": str(exc)}), 400
+        except Exception as exc:
+            return jsonify({"error": f"원본 IAM 업데이트 실패: {exc}"}), 500
+
     @app.post("/save")
     def save():
         payload = request.get_json(silent=True) or {}
@@ -937,6 +1200,7 @@ def create_app(store: ProjectStore | None = None) -> Flask:
                 payload.get("tree") or {},
                 bool(payload.get("fix_to_world", True)),
                 bool(payload.get("include_moveit", False)),
+                payload.get("root_joint_mode"),
             )
             return jsonify({
                 "status": "ok",
