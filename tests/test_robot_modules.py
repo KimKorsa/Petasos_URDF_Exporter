@@ -72,6 +72,18 @@ class RobotModuleTests(unittest.TestCase):
     def test_unknown_ids_are_rejected(self):
         self.assertFalse(validate_module_selection(self.tree, ["missing"], [])["valid"])
 
+    def test_duplicate_identity_and_disabled_member_are_invalid(self):
+        tree = copy.deepcopy(self.tree)
+        tree['children'][0]['link_group']['_link_id'] = tree['_link_id']
+        self.assertFalse(validate_module_selection(tree, self.links, self.joints)['valid'])
+        self.palm['disabled'] = True
+        self.assertFalse(validate_module_selection(self.tree, self.links, self.joints)['valid'])
+
+    def test_unknown_module_version_is_rejected(self):
+        tree = create_module(self.tree, self.links, self.joints, 'gripper')
+        tree['_modules'][0]['version'] = 2
+        self.assertTrue(validate_modules(tree))
+
     def test_workspace_persists_ids(self):
         from URDF_Exporter.standalone.server import ProjectStore
         with tempfile.TemporaryDirectory() as directory:

@@ -2,6 +2,7 @@
 from __future__ import annotations
 import copy
 import numpy as np
+from trimesh.transformations import quaternion_from_matrix
 from URDF_Exporter.core.Structure import RobotStructure
 from .robot_modules import walk_tree, validate_modules
 
@@ -21,6 +22,28 @@ def to_preview(matrix, units=1000):
     result = rigid(matrix).copy()
     result[:3, 3] *= units
     return result.T.flatten().tolist()
+
+
+def set_world_frame(info, matrix, units=1000):
+    matrix = rigid(matrix)
+    info['_joint_world_matrix'] = matrix.flatten().tolist()
+    info['_preview_world_frame_matrix'] = to_preview(matrix, units)
+    info['_preview_world_xyz'] = matrix[:3, 3].tolist()
+    quaternion = quaternion_from_matrix(matrix)
+    info['_preview_world_quaternion'] = [*quaternion[1:].tolist(), float(quaternion[0])]
+    for key in ('_preview_local_quaternion', '_cad_transform_snapshot', '_zero_calibration_backup'):
+        info.pop(key, None)
+
+
+def transform_pick_metadata(info, transform, units=1000):
+    for key in ('_joint_snap', '_joint_mates'):
+        for field, value in (info.get(key) or {}).items():
+            if not isinstance(value, list) or len(value) != 3:
+                continue
+            if field.endswith(('root_point',)):
+                info[key][field] = ((transform @ np.array([*(np.array(value)/units), 1]))[:3]*units).tolist()
+            elif field.endswith(('root_normal','root_tangent','root_y_axis')):
+                info[key][field] = (transform[:3,:3] @ np.array(value)).tolist()
 
 
 def world_frames(state, tree):
@@ -68,8 +91,8 @@ def capture_module(state, tree, module_id):
     for node, joint, _ in walk_tree(subtree):
         if joint is not None:
             info = joint.setdefault('joint_info', {})
-            info['_joint_world_matrix'] = (inverse @ frames[node['_link_id']]).flatten().tolist()
-            info.pop('_preview_world_frame_matrix', None)
+            set_world_frame(info, inverse @ frames[node['_link_id']])
+            transform_pick_metadata(info, inverse, tree.get('_preview_units_per_meter',1000))
             info.pop('link_world_inv_matrix', None)
     joint_names = {joint['joint_name'] for _, joint, _ in walk_tree(subtree) if joint is not None}
     transforms = {name: (inverse @ components[name]).flatten().tolist() for name in names}
@@ -78,7 +101,7 @@ def capture_module(state, tree, module_id):
         if part['name'] in names:
             item = copy.deepcopy(part)
             # No CAD machine paths in a portable module.
-            for key in ('source_file', 'source_path', 'mesh_path', 'assembly_path'):
+            for key in ('source_file', 'source_path', 'mesh_path', 'mesh_file', 'cad_source_file', 'assembly_path'):
                 item.pop(key, None)
             matrix = transforms[item['name']]
             item['position_mm'] = [matrix[i] * 1000 for i in (3, 7, 11)]
@@ -105,7 +128,8 @@ def place_module(payload, root_world):
     for node, joint, _ in walk_tree(placed['tree']):
         if joint is not None:
             info = joint['joint_info']
-            info['_joint_world_matrix'] = (target @ rigid(info['_joint_world_matrix'])).flatten().tolist()
+            set_world_frame(info, target @ rigid(info['_joint_world_matrix']))
+            transform_pick_metadata(info, target)
     for part in placed['parts']:
         matrix = placed['visual_transforms'][part['name']]
         part['position_mm'] = [matrix[i] * 1000 for i in (3, 7, 11)]

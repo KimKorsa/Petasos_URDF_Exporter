@@ -7,15 +7,15 @@ import uuid
 
 
 def walk_tree(tree: dict):
-    yield tree, None, None
-    for joint in tree.get("children", []):
-        child = joint.get("link_group")
-        if not isinstance(child, dict):
-            raise ValueError("조인트에 자식 링크가 없습니다.")
-        yield child, joint, tree
-        for descendant, edge, parent in walk_tree(child):
-            if edge is not None:
-                yield descendant, edge, parent
+    stack, seen = [(tree, None, None)], set()
+    while stack:
+        node, edge, parent = stack.pop()
+        if not isinstance(node, dict) or id(node) in seen:
+            raise ValueError('순환/중복 연결 또는 잘못된 링크입니다.')
+        seen.add(id(node))
+        yield node, edge, parent
+        for joint in reversed(node.get('children', [])):
+            stack.append((joint.get('link_group'), joint, node))
 
 
 def ensure_module_ids(tree: dict) -> dict:
@@ -40,7 +40,13 @@ def validate_module_selection(tree, link_ids, joint_ids, editing_id=None):
     def error(code, ids, message):
         errors.append({"code": code, "ids": sorted(ids), "message": message})
 
-    entries = list(walk_tree(tree))
+    try:
+        entries = list(walk_tree(tree))
+        ids = [n.get('_link_id') for n, _, _ in entries] + [j.get('_joint_id') for _, j, _ in entries if j is not None]
+        if any(not isinstance(i, str) or not i for i in ids) or len(set(ids)) != len(ids):
+            raise ValueError('누락/중복 ID')
+    except (ValueError, TypeError):
+        return {'valid': False, 'errors': [{'code':'invalid_graph','ids':[], 'message':'트리 ID 또는 연결이 올바르지 않습니다.'}], 'root_link_id':None,'attachment_joint_id':None}
     links = {node.get("_link_id"): node for node, _, _ in entries}
     joints = {joint.get("_joint_id"): (node, joint, parent)
               for node, joint, parent in entries if joint is not None}
@@ -53,10 +59,14 @@ def validate_module_selection(tree, link_ids, joint_ids, editing_id=None):
     if tree.get("_link_id") in selected_links:
         error("robot_root", [tree["_link_id"]], "로봇 본체 루트는 끝단 모듈로 지정할 수 없습니다.")
     for identity in selected_links & links.keys():
+        if links[identity].get('disabled'):
+            error('disabled', [identity], '비활성 링크는 모듈에 포함할 수 없습니다.')
         if links[identity].get("name") in {"world", "base_footprint"}:
             error("reserved_root", [identity], "월드/바닥 프레임은 모듈로 지정할 수 없습니다.")
     incoming, outgoing, internal = [], [], set()
     for jid, (node, joint, parent) in joints.items():
+        if jid in selected_joints and joint.get('disabled'):
+            error('disabled', [jid], '비활성 조인트는 모듈에 포함할 수 없습니다.')
         child_in = node.get("_link_id") in selected_links
         parent_in = parent.get("_link_id") in selected_links
         if child_in and parent_in:
@@ -120,7 +130,11 @@ def create_module(tree, link_ids, joint_ids, name):
 
 def validate_modules(tree):
     errors = []
+    seen = set()
     for module in tree.get("_modules", []):
+        if module.get('version') != 1 or not module.get('id') or module['id'] in seen:
+            errors.append({'code':'invalid_module','ids':[], 'message':'중복 모듈 ID 또는 지원하지 않는 모듈 버전입니다.'})
+        seen.add(module.get('id'))
         result = validate_module_selection(tree, module.get("link_ids", []),
                                            module.get("joint_ids", []), module.get("id"))
         errors.extend(result["errors"])

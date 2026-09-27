@@ -16,7 +16,7 @@ import urllib.request
 import webbrowser
 from pathlib import Path, PurePosixPath
 
-from flask import Flask, jsonify, request, send_file, send_from_directory
+from flask import Flask, jsonify, request, send_file, send_from_directory, g
 
 from URDF_Exporter.core.web_ui import HTML_CONTENT
 from URDF_Exporter.standalone.adapters import SUPPORTED_NATIVE_EXTENSIONS
@@ -36,6 +36,7 @@ from URDF_Exporter.standalone.importers import (
 from URDF_Exporter.standalone.reimporter import merge_reimported_state
 from URDF_Exporter.standalone.physical_materials import ensure_material_editor_data
 from URDF_Exporter.standalone.robot_modules import ensure_module_ids, validate_modules
+from URDF_Exporter.standalone.module_api import register_module_api
 from moveit.wsl_runner import WslMoveItRunner
 
 
@@ -522,6 +523,9 @@ class ProjectStore:
         self.last_project_file = self.projects_root / ".last_project"
         self.project_dir: Path | None = None
         self.state: dict | None = None
+        self.revision = 0
+        self.module_epoch = 0
+        self.module_lock = threading.RLock()
         self.archive_path: Path | None = None
         self.description_dir: Path | None = None
         self.bundle_dir: Path | None = None
@@ -564,6 +568,7 @@ class ProjectStore:
         if not self.state:
             return self.empty_tree()
         self.state["tree"] = ensure_module_ids(ensure_material_editor_data(self.state))
+        self.state["tree"]["_module_revision"] = self.revision
         return self.state["tree"]
 
     def _write_current_state(self) -> Path:
@@ -576,6 +581,7 @@ class ProjectStore:
             encoding="utf-8",
         )
         os.replace(temporary_path, state_path)
+        self.revision += 1
         self.last_project_file.write_text(str(self.project_dir), encoding="utf-8")
         return state_path
 
@@ -648,6 +654,7 @@ class ProjectStore:
             os.replace(named_temporary, named_path)
         return {
             "project_name": self.state.get("project_name") or tree.get("_project_name"),
+            "revision": self.revision,
             "path": str(state_path),
             "save_name": stored_name,
             "active_workspace_name": (
@@ -741,6 +748,7 @@ class ProjectStore:
             state["active_workspace_name"] = stored_name
             state["tree"]["_active_workspace_name"] = stored_name
         self.project_dir = target_project_dir
+        self.module_epoch += 1
         self.state = state
         self.archive_path = None
         self.description_dir = None
@@ -766,6 +774,8 @@ class ProjectStore:
         project_dir: Path,
         staging_dir: Path,
     ) -> dict:
+        self.revision += 1
+        self.module_epoch += 1
         source_dir = project_dir / "sources"
         mesh_dir = project_dir / "meshes"
         if source_dir.is_dir():
@@ -1009,6 +1019,25 @@ class ProjectStore:
 def create_app(store: ProjectStore | None = None) -> Flask:
     app = Flask(__name__)
     project_store = store or ProjectStore()
+    register_module_api(app, project_store)
+
+    @app.before_request
+    def lock_editor_mutations():
+        if request.method == 'POST' or request.path == '/data':
+            project_store.module_lock.acquire()
+            g.module_lock_held = True
+        if request.path in {'/workspace/save', '/save'}:
+            payload = request.get_json(silent=True) or {}
+            tree = payload.get('tree') or payload
+            if (tree.get('_modules') or (project_store.state or {}).get('tree', {}).get('_modules')):
+                if tree.get('_module_revision') != project_store.revision:
+                    return jsonify(error='프로젝트가 변경됐습니다. 새로 불러온 후 다시 저장하세요.'), 409
+
+    @app.teardown_request
+    def unlock_editor_mutations(error=None):
+        if getattr(g, 'module_lock_held', False):
+            g.module_lock_held = False
+            project_store.module_lock.release()
     wsl_rviz_runner = WslRvizRunner()
     wsl_moveit_runner = WslMoveItRunner(
         APP_ROOT / "moveit" / "validate_moveit_config.py"
@@ -1071,6 +1100,12 @@ def create_app(store: ProjectStore | None = None) -> Flask:
     def static_three(filename: str):
         vendor = APP_ROOT / "URDF_Exporter" / "vendor" / "three"
         return send_from_directory(vendor, filename)
+
+    @app.get("/static/modules/<filename>")
+    def static_modules(filename: str):
+        if filename not in {"module_selection.js", "module_ui.js"}:
+            return "", 404
+        return send_from_directory(APP_ROOT / "URDF_Exporter" / "core", filename)
 
     @app.get("/meshes/<path:filename>")
     def mesh(filename: str):
