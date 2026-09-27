@@ -5,5 +5,6 @@ __pycache__/
 .venv/
 .venv.petasos-backup-*/
 standalone_projects/
+standalone_modules/
 export/
 .worktrees/
