@@ -44,6 +44,21 @@ class ModuleServiceTests(unittest.TestCase):
             self.operation(replace_id='unknown')
         self.assertEqual(self.state, before)
 
+    def test_material_and_controller_collisions_are_rejected(self):
+        for namespace in ('color', 'physical', 'controller'):
+            with self.subTest(namespace=namespace):
+                state, tree = copy.deepcopy(self.state), copy.deepcopy(self.tree)
+                if namespace == 'color':
+                    state['colors']['tool_steel'] = '1 0 0 1'
+                elif namespace == 'physical':
+                    self.payload['physical_materials'] = {'steel': {'density': 7800}}
+                    tree['_physical_materials'] = {'tool_steel': {'density': 1000}}
+                else:
+                    self.payload['controllers'] = [{'name': 'gripper', 'joints': ['grip']}]
+                    tree['_controllers'] = [{'name': 'tool_gripper', 'joints': []}]
+                with self.assertRaises(ValueError):
+                    self.operation(state, tree)
+
     def test_new_instance_has_unique_view_ids_and_updated_preview_frame(self):
         self.payload['tree']['_patcher_id'] = 'same_view_id'
         info = self.payload['tree']['children'][0]['joint_info']

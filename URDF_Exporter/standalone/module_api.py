@@ -54,7 +54,7 @@ def register_module_api(app, store):
         errors = validate_modules(tree)
         if errors:
             return jsonify(error='모듈 범위를 확인하세요.', details=errors), 400
-        return jsonify(service.commit(copy.deepcopy(store.state), tree))
+        return jsonify(service.commit(copy.deepcopy(store.state), tree, data['tree']))
 
     @app.get('/modules/library')
     @endpoint
@@ -118,4 +118,4 @@ def register_module_api(app, store):
         data = request.get_json()
         service.check_revision(data.get('revision'))
         state = reposition_module(store.state, data['tree'], data['module_id'], data['xyz_m'], data['rpy_rad'])
-        return jsonify(service.commit(state, state['tree']))
+        return jsonify(service.commit(state, state['tree'], data['tree']))

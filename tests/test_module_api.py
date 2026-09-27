@@ -38,6 +38,24 @@ class ModuleApiTests(unittest.TestCase):
         self.assertEqual(restored.status_code, 200, restored.data)
         self.assertEqual(len(restored.json['tree']['_modules']), 1)
         self.assertNotIn('tool_palm_part', self.store.state['inertial'])
+        request.update(tree=self.store.tree(), revision=self.store.revision)
+        retried = self.client.post('/modules/apply', json=request)
+        self.assertEqual(retried.status_code, 200, retried.data)
+        request.update(tree=self.store.tree(), revision=self.store.revision,
+                       replace_id=retried.json['tree']['_modules'][-1]['id'])
+        replaced = self.client.post('/modules/apply', json=request)
+        self.assertEqual(replaced.status_code, 200, replaced.data)
+
+    def test_undo_preserves_unsaved_edits_before_module_action(self):
+        tree = copy.deepcopy(self.tree)
+        tree['name'] = 'edited_before_module_action'
+        edited = self.client.post('/modules/unassign', json={'tree': tree,
+            'module_id': tree['_modules'][0]['id'], 'revision': self.store.revision})
+        self.assertEqual(edited.status_code, 200, edited.data)
+        restored = self.client.post('/modules/restore', json={
+            'snapshot_id': edited.json['undo_snapshot_id'], 'revision': self.store.revision})
+        self.assertEqual(restored.status_code, 200, restored.data)
+        self.assertEqual(restored.json['tree']['name'], tree['name'])
 
     def test_invalid_module_workspace_is_not_saved(self):
         broken = copy.deepcopy(self.tree)

@@ -1,5 +1,6 @@
 """Prepare first, commit once. Undo retains full project state, not just the tree."""
 import copy
+import filecmp
 import re
 import shutil
 import uuid
@@ -97,6 +98,13 @@ def prepare_module_operation(state, tree, payload, *, parent_link_id, prefix, xy
             mapping[controller['id']] = uuid.uuid4().hex
     occupied = {n['name'] for n, _, _ in walk_tree(tree)} | set(state.get('inertial', {}))
     occupied |= {j['joint_name'] for _, j, _ in walk_tree(tree) if j is not None}
+    occupied |= {c['name'] for c in tree.get('_controllers', [])}
+    for source, existing in (('colors', state.get('colors', {})),
+                             ('physical_materials', tree.get('_physical_materials', {}))):
+        for name, value in payload.get(source, {}).items():
+            target_name = mapping[name]
+            if target_name in existing and (not replace_id or existing[target_name] != _remap(value, mapping)):
+                raise ValueError('재질 이름이 중복됩니다. 다른 Prefix를 사용하세요.')
     if occupied & set(mapping.values()):
         raise ValueError('같은 Prefix의 이름이 이미 있습니다. 다른 Prefix를 사용하세요.')
     placed = _remap(place_module(payload, target.flatten().tolist()), mapping)
@@ -149,8 +157,11 @@ class ModuleService:
             **{k: request[k] for k in ('parent_link_id', 'prefix', 'xyz_m', 'rpy_rad')}, replace_id=request.get('replace_id'))
         return result, payload, folder
 
-    def commit(self, state, tree):
+    def commit(self, state, tree, before_tree=None):
         before = copy.deepcopy(self.store.state)
+        snapshot = copy.deepcopy(before)
+        if before_tree is not None:
+            snapshot['tree'] = copy.deepcopy(before_tree)
         token = uuid.uuid4().hex
         state['tree'] = tree
         try:
@@ -159,7 +170,7 @@ class ModuleService:
         except Exception:
             self.store.state = before
             raise
-        self.snapshots[token] = (self.store.project_dir, before, self.store.module_epoch)
+        self.snapshots[token] = (self.store.project_dir, snapshot, self.store.module_epoch)
         if len(self.snapshots) > 30:
             del self.snapshots[next(iter(self.snapshots))]
         return {'tree': self.store.tree(), 'revision': self.store.revision, 'undo_snapshot_id': token}
@@ -170,15 +181,29 @@ class ModuleService:
             result, payload, folder = self.preview(request)
             destination = self.store.project_dir / 'meshes'
             destination.mkdir(exist_ok=True)
-            # New names only: existing project meshes are never overwritten/deleted.
+            # Undo retains assets. Reuse byte-identical files, never overwrite old geometry.
+            pending = []
             for item in payload['meshes']:
                 name = result['name_map'][item['component']] + '.stl'
                 target = destination / safe_path(name)
+                source = folder / safe_path(item['path'])
                 if target.exists():
-                    raise ValueError('이 Prefix의 메시가 이미 존재합니다. 새 Prefix를 사용하세요.')
-            for item in payload['meshes']:
-                shutil.copyfile(folder / safe_path(item['path']), destination / (result['name_map'][item['component']] + '.stl'))
-            response = self.commit(result['state'], result['tree'])
+                    if target.is_symlink() or not filecmp.cmp(source, target, shallow=False):
+                        raise ValueError('이 Prefix에 다른 메시가 있습니다. 새 Prefix를 사용하세요.')
+                else:
+                    pending.append((source, target))
+            created = []
+            try:
+                for source, target in pending:
+                    with target.open('xb') as output:
+                        created.append(target)
+                        with source.open('rb') as input_file:
+                            shutil.copyfileobj(input_file, output)
+                response = self.commit(result['state'], result['tree'], request.get('tree'))
+            except Exception:
+                for target in created:
+                    target.unlink(missing_ok=True)
+                raise
             return {**response, 'changes': result['changes']}
 
     def restore(self, snapshot_id, expected_revision):
