@@ -17,6 +17,8 @@ HTML_CONTENT = """
     <script src="/static/three/three.min.js"></script>
     <script src="/static/three/STLLoader.js"></script>
     <script src="/static/three/OrbitControls.js"></script>
+    <script src="/static/modules/module_selection.js"></script>
+    <script src="/static/modules/module_ui.js"></script>
     <style>
         :root {
             --bg-dark: #1e1e1e;
@@ -2986,6 +2988,7 @@ HTML_CONTENT = """
         }
 
         async function saveWorkspace(showStatus = false, saveName = '') {
+            if (ModuleEditor.busy) return false;
             if (
                 !workspaceAutosaveReady
                 || !treeData
@@ -3013,6 +3016,7 @@ HTML_CONTENT = """
                     throw new Error(result.error || '작업 저장에 실패했습니다.');
                 }
                 const activeName = String(result.active_workspace_name || '').trim();
+                if (Number.isInteger(result.revision)) treeData._module_revision = result.revision;
                 if (activeName) {
                     treeData._active_workspace_name = activeName;
                     updateWorkspaceManagerActiveState();
@@ -8449,6 +8453,10 @@ HTML_CONTENT = """
         function undo() {
             if (historyStack.length === 0) return;
             const entry = historyStack.pop();
+            if (entry.kind === 'module') {
+                ModuleEditor.restore(entry);
+                return;
+            }
             if (entry.kind === 'viewer_camera') {
                 restoreViewerCameraState(entry.state);
                 return;
@@ -8467,7 +8475,9 @@ HTML_CONTENT = """
             if (entry.kind !== 'tree' || !entry.snapshot) return;
 
             pendingPreviewPoseRestore = capturePreviewJointPose();
+            const latestModuleRevision = treeData._module_revision;
             treeData = JSON.parse(entry.snapshot);
+            treeData._module_revision = latestModuleRevision;
             selectedElement = null;
             highlight3DComponents([]);
             previewRigDirty = true;
@@ -8484,6 +8494,7 @@ HTML_CONTENT = """
             ) return;
             if (e.key === 'Escape') {
                 e.preventDefault();
+                if (ModuleEditor.active) { ModuleEditor.cancel(); return; }
                 hideJointSnapMarker();
                 activeJointSnapMarkerInfo = null;
                 baseFootprintFrameSelected = false;
@@ -9313,6 +9324,7 @@ HTML_CONTENT = """
             };
             viewport.onpointerdown = event => {
                 if (event.button !== 0) return;
+                if (ModuleEditor.rectangle(event, viewport)) return;
                 if (event.target.closest(
                     '.patcher-node, .patcher-joint-label, .patcher-cable, .patcher-world-fix, .patcher-footprint-settings, .patcher-controller-label, .patcher-controller-frame, .patcher-controller-border-hit'
                 )) return;
@@ -9460,6 +9472,10 @@ HTML_CONTENT = """
         function renderPatcher(container) {
             container.className = 'tree patcher-mode';
             const entries = patcherEntries();
+            entries.forEach(entry => {
+                if (!entry.node._link_id) entry.node._link_id = crypto.randomUUID();
+                if (entry.jointObj && !entry.jointObj._joint_id) entry.jointObj._joint_id = crypto.randomUUID();
+            });
             const connected = patcherConnectedState(entries);
             const shell = document.createElement('div');
             shell.className = 'patcher-shell';
@@ -9481,6 +9497,8 @@ HTML_CONTENT = """
                     <button type="button" onclick="disconnectSelectedJoint()">✂ 선택 배선 끊기</button>
                     <button id="patcher-controller-mode" type="button"
                             onclick="togglePatcherControllerMode()">▢ 컨트롤러 지정</button>
+                    <button type="button" onclick="ModuleEditor.active ? submitModuleSelection() : enterModuleSelection()">${ModuleEditor.active ? '✓ 모듈 생성/수정' : '⬡ 모듈 지정'}</button>
+                    <button type="button" onclick="openModuleLibrary()">⬡ 모듈 라이브러리</button>
                     <button id="patcher-material-shelf-toggle" class="patcher-material-shelf-toggle" type="button"
                             onclick="togglePatcherMaterialShelf()">▾ 재질 라이브러리</button>
                     <span id="patcher-summary" class="patcher-summary"></span>
@@ -9662,6 +9680,7 @@ HTML_CONTENT = """
             element.className = 'patcher-node';
             element._petasosNode = node;
             element.dataset.patcherId = id;
+            element.dataset.moduleLink = node._link_id || '';
             element.style.left = `${position.x}px`;
             element.style.top = `${position.y}px`;
             element.style.minHeight = `${patcherNodeVisualHeight(node)}px`;
@@ -9768,6 +9787,7 @@ HTML_CONTENT = """
             box.append(partsDiv, partsList);
             box.onclick = event => {
                 event.stopPropagation();
+                if (ModuleEditor.active) { ModuleEditor.pick('link', node._link_id, event); return; }
                 if (patcherGroupingMode) {
                     togglePatcherGroupNode(node, element);
                 } else {
@@ -9941,6 +9961,7 @@ HTML_CONTENT = """
         }
 
         function togglePatcherControllerMode() {
+            ModuleEditor.active = false;
             if (patcherControllerSelectionMode && patcherControllerJointSelection.size > 0) {
                 createControllerFromPatcherSelection();
                 return;
@@ -10245,6 +10266,7 @@ HTML_CONTENT = """
         }
 
         function togglePatcherGroupingMode() {
+            ModuleEditor.active = false;
             patcherGroupingMode = !patcherGroupingMode;
             if (!patcherGroupingMode) patcherGroupSelection.clear();
             render({ skipPreview: true });
@@ -10556,6 +10578,7 @@ HTML_CONTENT = """
         function attachPatcherNodeMove(handle, node, element) {
             handle.onpointerdown = event => {
                 if (event.button !== 0) return;
+                if (ModuleEditor.active) return;
                 if (patcherGroupingMode) return;
                 event.preventDefault();
                 event.stopPropagation();
@@ -10834,6 +10857,7 @@ HTML_CONTENT = """
                 label.type = 'button';
                 label.className = 'patcher-joint-label';
                 label.dataset.jointName = jointObj.joint_name;
+                label.dataset.moduleJoint = jointObj._joint_id || '';
                 if (cableDisabled) {
                     label.classList.add('disabled');
                 }
@@ -10851,6 +10875,7 @@ HTML_CONTENT = """
                 const childEntry = entries.find(item => item.jointObj === jointObj);
                 label.onclick = event => {
                     event.stopPropagation();
+                    if (ModuleEditor.active) { ModuleEditor.pick('joint', jointObj._joint_id, event); return; }
                     if (patcherControllerSelectionMode) {
                         toggleControllerJointSelection(jointObj);
                         return;
@@ -10885,6 +10910,7 @@ HTML_CONTENT = """
             });
 
             renderPatcherControllerFrames(canvas, entries);
+            ModuleEditor.decorate(canvas);
 
             if (patcherConnectionDrag && patcherConnectionDrag.pointer) {
                 const start = patcherPortPoint(
@@ -12328,6 +12354,7 @@ HTML_CONTENT = """
 
         function updatePanel() {
             const body = document.getElementById('panel-body');
+            if (selectedElement?.type === 'module') { ModuleEditor.properties(body, selectedElement.moduleId); return; }
             const nextPanelSelectionIdentity = selectedElement?.controller || selectedElement?.jointObj || selectedElement?.node || null;
             if (nextPanelSelectionIdentity !== panelSelectionIdentity) {
                 panelSelectionIdentity = nextPanelSelectionIdentity;
@@ -13595,6 +13622,18 @@ class UIHandler(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps(self.server.tree_data).encode('utf-8'))
+        elif self.path.startswith('/static/modules/'):
+            filename = os.path.basename(self.path)
+            if filename not in {'module_ui.js', 'module_selection.js'}:
+                self.send_response(404)
+                self.end_headers()
+                return
+            with open(os.path.join(os.path.dirname(__file__), filename), 'rb') as asset:
+                content = asset.read()
+            self.send_response(200)
+            self.send_header('Content-type', 'application/javascript')
+            self.end_headers()
+            self.wfile.write(content)
         elif self.path.startswith('/static/three/'):
             try:
                 filename = os.path.basename(urllib.parse.unquote(self.path))
