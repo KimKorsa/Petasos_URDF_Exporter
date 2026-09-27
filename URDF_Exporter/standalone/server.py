@@ -35,6 +35,7 @@ from URDF_Exporter.standalone.importers import (
 )
 from URDF_Exporter.standalone.reimporter import merge_reimported_state
 from URDF_Exporter.standalone.physical_materials import ensure_material_editor_data
+from URDF_Exporter.standalone.robot_modules import ensure_module_ids, validate_modules
 from moveit.wsl_runner import WslMoveItRunner
 
 
@@ -562,7 +563,8 @@ class ProjectStore:
     def tree(self) -> dict:
         if not self.state:
             return self.empty_tree()
-        return ensure_material_editor_data(self.state)
+        self.state["tree"] = ensure_module_ids(ensure_material_editor_data(self.state))
+        return self.state["tree"]
 
     def _write_current_state(self) -> Path:
         assert self.state is not None
@@ -598,6 +600,10 @@ class ProjectStore:
             raise ImportFailure("먼저 조립품을 불러와야 합니다.")
         if not isinstance(tree, dict) or not tree.get("name"):
             raise ImportFailure("저장할 프리뷰 편집 데이터가 올바르지 않습니다.")
+        tree = ensure_module_ids(tree)
+        module_errors = validate_modules(tree)
+        if module_errors:
+            raise ImportFailure(" / ".join(error["message"] for error in module_errors))
         if isinstance(editor_settings, dict):
             tree["_editor_settings"] = {
                 "fix_to_world": bool(editor_settings.get("fix_to_world", True)),

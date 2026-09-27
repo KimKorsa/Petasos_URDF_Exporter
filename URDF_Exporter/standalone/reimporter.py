@@ -5,6 +5,7 @@ from collections import defaultdict
 from typing import Any, Callable
 
 from URDF_Exporter.standalone.importers import ImportFailure
+from URDF_Exporter.standalone.robot_modules import ensure_module_ids, validate_modules
 
 
 GENERATED_TREE_KEYS = {
@@ -168,6 +169,10 @@ def merge_reimported_state(
         copy.deepcopy(previous_tree),
         mapping,
     )
+    merged_tree = ensure_module_ids(merged_tree)
+    errors = validate_modules(merged_tree)
+    if errors:
+        raise ImportFailure(" / ".join(error["message"] for error in errors))
     fresh_tree = fresh_state.get("tree") or {}
     for key in GENERATED_TREE_KEYS:
         if key in fresh_tree:
