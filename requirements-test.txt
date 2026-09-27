@@ -1,0 +1,2 @@
+-r requirements-standalone.txt
+xacro==2.1.1

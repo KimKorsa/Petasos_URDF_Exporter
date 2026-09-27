@@ -691,7 +691,8 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         (os.path.join("share", package_name, "launch"), glob("launch/*.py")),
         (os.path.join("share", package_name, "config"), glob("config/*")),
-        (os.path.join("share", package_name, "urdf"), glob("urdf/*")),
+        (os.path.join("share", package_name, "urdf"), [p for p in glob("urdf/*") if os.path.isfile(p)]),
+        (os.path.join("share", package_name, "urdf", "modules"), glob("urdf/modules/*.xacro")),
         (os.path.join("share", package_name, "meshes"), glob("meshes/*.stl")),
         (os.path.join("share", package_name, "analysis"), glob("analysis/*.json")),
     ],
@@ -1591,6 +1592,10 @@ def export_project(
     output_root: str | None = None,
     root_joint_mode: str | None = None,
 ) -> dict:
+    from .robot_modules import validate_modules
+    module_errors = validate_modules(edited_tree)
+    if module_errors:
+        raise ValueError(' / '.join(error['message'] for error in module_errors))
     robot_name = state["project_name"].lower()
     if root_joint_mode not in {"world", "base_footprint", "none"}:
         root_joint_mode = "world" if fix_to_world else "none"
@@ -1632,7 +1637,14 @@ def export_project(
     )
     struct.apply_tree_data(copy.deepcopy(edited_tree))
     struct.standardize_names()
-    controller_groups = _controller_groups(struct.joints, edited_tree)
+    controller_tree = copy.deepcopy(edited_tree)
+    for controller in controller_tree.get('_controllers', []):
+        controller['joints'] = [struct.joint_name_map.get(name, name) for name in controller.get('joints', [])]
+        for key in ('left_wheel_names', 'right_wheel_names'):
+            settings = controller.get('settings', {})
+            if key in settings:
+                settings[key] = [struct.joint_name_map.get(name, name) for name in settings[key]]
+    controller_groups = _controller_groups(struct.joints, controller_tree)
     _prepare_diff_drive_joint_interfaces(controller_groups, struct.joints)
     normalized_diff_drive_axes = _normalize_diff_drive_wheel_axes(
         controller_groups,
@@ -1735,6 +1747,8 @@ def export_project(
         "base_footprint" if root_joint_mode == "base_footprint" else "base_link",
     )
     _write_analysis(state, struct, save_dir, moveit_readiness)
+    from .module_export import resolve_module_exports, write_module_xacros
+    write_module_xacros(Path(save_dir), resolve_module_exports(edited_tree, struct.export_name_map))
     if normalized_diff_drive_axes:
         axis_report = Path(save_dir, "analysis", "diff_drive_axis_normalization.json")
         axis_report.write_text(

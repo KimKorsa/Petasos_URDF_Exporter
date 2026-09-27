@@ -66,6 +66,22 @@ def generate_smoke_config(
         )
     joints = _joint_data(urdf_path)
     joint_overrides = joint_overrides or {}
+    trajectory_type = 'joint_trajectory_controller/JointTrajectoryController'
+    gripper_types = {'position_controllers/GripperActionController', 'effort_controllers/GripperActionController'}
+    for group in controller_groups or []:
+        controller_type = group.get('type', trajectory_type)
+        if controller_type not in {trajectory_type, *gripper_types}:
+            raise ValueError(f"Unsupported MoveIt controller type: {controller_type}. Use description export for non-MoveIt controllers.")
+        if controller_type in gripper_types:
+            names = group.get('joints', [])
+            if len(names) != 1:
+                raise ValueError('GripperCommand requires exactly one driven joint; use mimic for followers.')
+            info = joint_overrides.get(names[0], {})
+            if not {'position', 'velocity'} <= set(info.get('state_interfaces') or ['position']):
+                raise ValueError('Humble GripperActionController requires position and velocity state interfaces.')
+            expected = 'effort' if controller_type.startswith('effort_') else 'position'
+            if info.get('command_interface', 'position') != expected:
+                raise ValueError(f'GripperActionController requires {expected} command interface.')
     for joint in joints:
         override = joint_overrides.get(joint["name"], {})
         try:
@@ -254,7 +270,7 @@ arm:
         if not group_joints:
             continue
         claimed.update(group_joints)
-        groups.append({"name": raw["name"], "joints": group_joints})
+        groups.append({"name": raw["name"], "joints": group_joints, "type": raw.get('type', trajectory_type)})
     unassigned = [joint["name"] for joint in joints if joint["name"] not in claimed]
     if unassigned:
         used_names = {group["name"] for group in groups}
@@ -270,19 +286,24 @@ arm:
     ros_manager_blocks = []
     ros_controller_blocks = []
     for group_index, group in enumerate(groups):
+        controller_type = group.get('type', trajectory_type)
+        is_gripper = controller_type in gripper_types
         group_joint_lines = "\n".join(f"      - {name}" for name in group["joints"])
         moveit_controller_blocks.extend([
             f"  {group['name']}:",
-            "    action_ns: follow_joint_trajectory",
-            "    type: FollowJointTrajectory",
+            "    action_ns: gripper_cmd" if is_gripper else "    action_ns: follow_joint_trajectory",
+            "    type: GripperCommand" if is_gripper else "    type: FollowJointTrajectory",
             f"    default: {'true' if group_index == 0 else 'false'}",
             "    joints:",
             group_joint_lines,
         ])
         ros_manager_blocks.extend([
             f"    {group['name']}:",
-            "      type: joint_trajectory_controller/JointTrajectoryController",
+            f"      type: {controller_type}",
         ])
+        if is_gripper:
+            ros_controller_blocks.extend(['', f"{group['name']}:", '  ros__parameters:', f"    joint: {group['joints'][0]}"])
+            continue
         command_interfaces = None
         state_interfaces = None
         for name in group["joints"]:

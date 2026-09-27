@@ -305,6 +305,7 @@ class RobotStructure:
 
     def apply_tree_data(self, data):
         """Web UI에서 수정한 JSON 트리 데이터를 바탕으로 물리 속성을 갱신합니다."""
+        self.export_name_map = {'links': {}, 'joints': {}}
         new_joints = {}
         new_inertial = {}
         new_materials = {}
@@ -329,6 +330,8 @@ class RobotStructure:
             components = node.get('components') or []
             if not components:
                 return
+            if node.get('_link_id'):
+                self.export_name_map['links'][node['_link_id']] = link_name
             
             base_comp = components[0] # 첫 번째 컴포넌트를 메인 레퍼런스로 사용
             if link_frame_world is None:
@@ -404,6 +407,8 @@ class RobotStructure:
                 if child.get('disabled') or child.get('link_group', {}).get('disabled'):
                     continue
                 j_name = child['joint_name']
+                if child.get('_joint_id'):
+                    self.export_name_map['joints'][child['_joint_id']] = j_name
                 j_info = child['joint_info']
                 # Use the exact frame seen in the 3D viewer as the URDF source
                 # of truth. This keeps nested joints on the same transform
@@ -459,7 +464,8 @@ class RobotStructure:
         트리 순회 순서에 따라 조인트를 joint_1, joint_2 ... 순서로 강제 리네이밍합니다.
         """
         root = self.find_root()
-        
+        original_root = root
+        original_joints = dict(self.joints)
         # 1. 루트 링크 이름 변경 -> base_link
         if root != "base_link":
             if "base_link" in self.inertial:
@@ -514,6 +520,16 @@ class RobotStructure:
                     new_joints[new_j_name] = self.joints[old_j_name]
 
         self.joints = new_joints
+        renamed = {old: new for old, info in original_joints.items()
+                   for new, current in new_joints.items() if info is current}
+        self.joint_name_map = renamed
+        for info in self.joints.values():
+            if info.get('mimic_joint') in renamed:
+                info['mimic_joint'] = renamed[info['mimic_joint']]
+        if hasattr(self, 'export_name_map'):
+            self.export_name_map['links'] = {key: root if value == original_root else value
+                                              for key, value in self.export_name_map['links'].items()}
+            self.export_name_map['joints'] = {key: renamed[value] for key, value in self.export_name_map['joints'].items()}
         self.build_tree()
 
 def get_structure_summary(joints_dict, inertial_dict, material_dict):
