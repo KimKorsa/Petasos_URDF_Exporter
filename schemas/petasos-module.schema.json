@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Petasos reusable robot module v1",
+  "type": "object",
+  "required": ["format", "version", "name", "root_link_id", "tree", "parts", "inertial", "materials", "visual_transforms", "meshes"],
+  "properties": {
+    "format": {"const": "petasos-module"},
+    "version": {"const": 1},
+    "name": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$"},
+    "root_link_id": {"type": "string"},
+    "tree": {"type": "object"},
+    "parts": {"type": "array"},
+    "inertial": {"type": "object"},
+    "materials": {"type": "object"},
+    "visual_transforms": {"type": "object"},
+    "meshes": {"type": "array", "items": {"type": "object", "required": ["component", "path"]}}
+  }
+}
