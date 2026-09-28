@@ -3,6 +3,8 @@ import copy
 import math
 import re
 import uuid
+from pathlib import Path
+from xml.etree import ElementTree as ET
 import numpy as np
 
 from .robot_modules import walk_tree
@@ -112,3 +114,51 @@ def set_sensor_world_point(sensor: dict, link_world_matrix: list[float], point_w
     result = copy.deepcopy(sensor)
     result['xyz_m'] = [float(v) for v in local[:3]]
     return result
+
+
+def resolved_sensor_frames(tree: dict, export_name_map: dict) -> list[dict]:
+    """Resolve stable owner IDs only after link names have been standardized."""
+    _valid_copy(tree)
+    link_names = export_name_map.get('links', {})
+    resolved = []
+    for sensor in tree.get('_sensors', []):
+        parent = link_names.get(sensor['parent_link_id'])
+        if not parent:
+            raise ValueError(f"{sensor['name']} 센서의 익스포트 링크를 찾을 수 없습니다.")
+        frame = sensor_frame_name(sensor['name'])
+        resolved.append({
+            'id': sensor['id'], 'name': sensor['name'], 'frame': frame,
+            'joint_name': frame + '_joint', 'parent': parent,
+            'xyz_m': list(sensor['xyz_m']), 'rpy_rad': list(sensor['rpy_rad']),
+        })
+    return resolved
+
+
+def write_sensor_frames(xacro_path: Path, resolved: list[dict]) -> None:
+    """Append massless, visual-free sensor frames atomically after validation."""
+    if not resolved:
+        return
+    ET.register_namespace('xacro', 'http://www.ros.org/wiki/xacro')
+    document = ET.parse(xacro_path)
+    robot = document.getroot()
+    existing_links = {element.get('name') for element in robot.iter('link')}
+    existing_joints = {element.get('name') for element in robot.iter('joint')}
+    frame_names = [sensor['frame'] for sensor in resolved]
+    joint_names = [sensor['joint_name'] for sensor in resolved]
+    if len(set(frame_names)) != len(frame_names) or len(set(joint_names)) != len(joint_names):
+        raise ValueError('센서 프레임 이름이 중복되었습니다.')
+    for sensor in resolved:
+        if sensor['parent'] not in existing_links:
+            raise ValueError(f"{sensor['name']} 센서의 부모 링크가 Xacro에 없습니다.")
+        if sensor['frame'] in existing_links | existing_joints or sensor['joint_name'] in existing_links | existing_joints:
+            raise ValueError(f"{sensor['name']} 센서 프레임 이름이 기존 이름과 충돌합니다.")
+    for sensor in resolved:
+        ET.SubElement(robot, 'link', {'name': sensor['frame']})
+        joint = ET.SubElement(robot, 'joint', {'name': sensor['joint_name'], 'type': 'fixed'})
+        ET.SubElement(joint, 'origin', {
+            'xyz': ' '.join(format(value, '.12g') for value in sensor['xyz_m']),
+            'rpy': ' '.join(format(value, '.12g') for value in sensor['rpy_rad']),
+        })
+        ET.SubElement(joint, 'parent', {'link': sensor['parent']})
+        ET.SubElement(joint, 'child', {'link': sensor['frame']})
+    document.write(xacro_path, encoding='utf-8', xml_declaration=True)
