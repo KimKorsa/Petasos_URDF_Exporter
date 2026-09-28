@@ -45,8 +45,19 @@ class SensorFramesTests(unittest.TestCase):
         disabled = copy.deepcopy(created)
         disabled['disabled'] = True
         self.assertTrue(validate_sensors(disabled))
+        child_id = self.tree['children'][0]['link_group']['_link_id']
+        child_sensor = create_sensor(self.tree, child_id, 'imu', 'child_imu')
+        child_sensor['children'][0]['disabled'] = True
+        self.assertTrue(validate_sensors(child_sensor))
         with self.assertRaises(ValueError):
             create_sensor(self.tree, self.root_id, 'camera_x', 'unknown')
+
+    def test_malformed_json_fields_are_validation_errors(self):
+        valid = create_sensor(self.tree, self.root_id, 'imu', 'imu')
+        for field in ('id', 'type', 'parent_link_id'):
+            broken = copy.deepcopy(valid)
+            broken['_sensors'][0][field] = ['invalid']
+            self.assertTrue(validate_sensors(broken), field)
 
     def test_world_pick_uses_rotated_link_local_coordinates(self):
         sensor = create_sensor(self.tree, self.root_id, 'depth_camera', 'front')['_sensors'][0]

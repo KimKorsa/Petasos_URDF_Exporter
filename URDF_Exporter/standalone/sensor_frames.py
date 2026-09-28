@@ -28,7 +28,15 @@ def validate_sensors(tree: dict) -> list[dict]:
         entries = list(walk_tree(tree))
     except (KeyError, TypeError, ValueError) as exc:
         return [{'message': '로봇 링크 구조를 확인하세요.'}]
-    active = {n.get('_link_id') for n, _, _ in entries if not n.get('disabled')}
+    active = set()
+    def collect_exported(node):
+        if not isinstance(node, dict) or node.get('disabled') or not node.get('components'):
+            return
+        active.add(node.get('_link_id'))
+        for connection in node.get('children') or []:
+            if not connection.get('disabled'):
+                collect_exported(connection.get('link_group'))
+    collect_exported(tree)
     existing = {n.get('name') for n, _, _ in entries} | {
         j.get('joint_name') for _, j, _ in entries if j is not None} | {'world', 'base_footprint'}
     ids, names, frames, generated = set(), set(), set(), set()
@@ -41,18 +49,20 @@ def validate_sensors(tree: dict) -> list[dict]:
         frame = sensor_frame_name(name) if isinstance(name, str) else None
         if not isinstance(sid, str) or not sid or sid in ids:
             errors.append({'message': '센서 ID가 없거나 중복되었습니다.'})
-        ids.add(sid)
+        if isinstance(sid, str):
+            ids.add(sid)
         if not isinstance(name, str) or not ROS_NAME.fullmatch(name) or name in names:
             errors.append({'message': '센서 이름은 고유한 ROS 이름이어야 합니다.'})
-        names.add(name)
+        if isinstance(name, str):
+            names.add(name)
         generated_names = {frame, frame + '_joint'} if frame else set()
         if frame in frames or generated_names & (existing | generated):
             errors.append({'message': '센서 프레임 이름이 링크 또는 조인트와 충돌합니다.'})
         frames.add(frame)
         generated.update(generated_names)
-        if sensor.get('type') not in SENSOR_TYPES:
+        if not isinstance(sensor.get('type'), str) or sensor['type'] not in SENSOR_TYPES:
             errors.append({'message': '지원하지 않는 센서 종류입니다.'})
-        if sensor.get('parent_link_id') not in active:
+        if not isinstance(sensor.get('parent_link_id'), str) or sensor['parent_link_id'] not in active:
             errors.append({'message': f'{name or "센서"}의 부착 링크가 없거나 비활성입니다.'})
         for key in ('xyz_m', 'rpy_rad'):
             value = sensor.get(key)

@@ -3036,7 +3036,9 @@ HTML_CONTENT = """
                 return result;
             } catch (error) {
                 console.error('Workspace save failed:', error);
-                setWorkspaceSaveButtonState('저장 실패', true);
+                setWorkspaceSaveButtonState(`저장 실패: ${error.message}`, true);
+                setWorkspaceManagerStatus(error.message, true);
+                if (showStatus) alert(`작업 저장 실패: ${error.message}`);
                 return false;
             } finally {
                 workspaceSaveInFlight = false;
@@ -5086,7 +5088,10 @@ HTML_CONTENT = """
                 viewerPointerDown = null;
                 viewerPointerDragged = false;
                 if (!shouldPick) return;
-                if (SensorEditor.pickMode) { SensorEditor.pick(event); return; }
+                if (SensorEditor.pickMode && selectedElement?.type === 'sensor') {
+                    SensorEditor.pick(event); return;
+                }
+                SensorEditor.pickMode = false;
                 if (jointOriginPickMode || groundFacePickMode || baseFootprintPickMode) {
                     suppressViewerDoubleClickUntil = performance.now() + 450;
                     if (jointOriginPickMode) handleJointOriginPick(event);
@@ -8348,6 +8353,7 @@ HTML_CONTENT = """
         }
 
         function clearSelection() {
+            SensorEditor.pickMode = false;
             baseFootprintFrameSelected = false;
             if (baseFootprintFrameMarker) baseFootprintFrameMarker.visible = false;
             viewerSelectedComponent = null;
@@ -10491,6 +10497,10 @@ HTML_CONTENT = """
 
         function mergePatcherNodeInto(source, target, saveHistory = true) {
             if (!treeData || !source || !target || source === target) return false;
+            if (SensorEditor.all().some(sensor => sensor.parent_link_id === source._link_id)) {
+                alert('이 링크에 센서가 있습니다. 먼저 센서를 다른 링크로 옮기거나 삭제한 뒤 병합하세요.');
+                return false;
+            }
             const entries = getFlatLinks(treeData, null, -1);
             const sourceEntry = entries.find(item => item.node === source);
             const targetEntry = entries.find(item => item.node === target);
@@ -10504,7 +10514,7 @@ HTML_CONTENT = """
 
                 const metadata = {};
                 Object.keys(source).forEach(key => {
-                    if (key.startsWith('_') && key !== '_patcher_id') {
+                    if (key.startsWith('_') && key !== '_patcher_id' && key !== '_link_id') {
                         metadata[key] = source[key];
                         delete source[key];
                     }
@@ -11100,7 +11110,7 @@ HTML_CONTENT = """
                 const storageInfo = patcherRelativeJointInfo(node, oldRoot);
                 const metadata = {};
                 Object.keys(oldRoot).forEach(key => {
-                    if (key.startsWith('_') && key !== '_patcher_id') {
+                    if (key.startsWith('_') && key !== '_patcher_id' && key !== '_link_id') {
                         metadata[key] = oldRoot[key];
                         delete oldRoot[key];
                     }
@@ -11571,6 +11581,7 @@ HTML_CONTENT = """
         }
 
         function selectElement(type, node, jointObj) {
+            SensorEditor.pickMode = false;
             if (jointOriginPickMode && jointOriginPickJoint !== jointObj) {
                 cancelJointOriginPick('다른 항목을 선택하여 조인트 위치 지정을 취소했습니다.');
             }

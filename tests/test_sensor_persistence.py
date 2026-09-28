@@ -23,4 +23,8 @@ class SensorPersistenceTests(unittest.TestCase):
             broken['_sensors'][0]['parent_link_id'] = 'deleted'
             with self.assertRaises(ImportFailure):
                 store.save_workspace(broken)
+            malformed = copy.deepcopy(store.tree())
+            malformed['_sensors'][0]['parent_link_id'] = ['not-a-link']
+            with self.assertRaises(ImportFailure):
+                store.save_workspace(malformed)
             self.assertEqual(store.tree()['_sensors'][0]['name'], 'front')
