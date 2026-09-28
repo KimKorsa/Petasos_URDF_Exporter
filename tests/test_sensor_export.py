@@ -3,6 +3,7 @@ import math
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from xml.etree import ElementTree as ET
 import xacro
 from tests.test_module_geometry import fixture
@@ -10,6 +11,18 @@ from URDF_Exporter.standalone.sensor_frames import create_sensor, update_sensor,
 
 
 class SensorExportTests(unittest.TestCase):
+    def test_moveit_seed_has_same_sensor_frame_topology(self):
+        from URDF_Exporter.standalone.exporter import _write_moveit_seed_urdf
+        sensor = {'name': 'camera', 'frame': 'camera_frame', 'joint_name': 'camera_frame_joint',
+                  'parent': 'base_link', 'xyz_m': [.01, 0, .02], 'rpy_rad': [0, 0, 0]}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'seed.urdf'
+            _write_moveit_seed_urdf(SimpleNamespace(inertial={'base_link': {}}, joints={}),
+                                    'robot', str(path), True, 'world', sensor_frames=[sensor])
+            robot = ET.parse(path).getroot()
+            self.assertIsNotNone(robot.find("link[@name='camera_frame']"))
+            self.assertEqual(robot.find("joint[@name='camera_frame_joint']/parent").get('link'), 'base_link')
+
     def test_real_export_contains_sensor_on_standardized_base_link(self):
         import trimesh
         from URDF_Exporter.standalone.exporter import export_project

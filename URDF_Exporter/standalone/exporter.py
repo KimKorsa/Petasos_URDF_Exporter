@@ -69,6 +69,7 @@ def _write_moveit_seed_urdf(
     path: str,
     fix_to_world: bool,
     root_joint_mode: str | None = None,
+    sensor_frames: list[dict] | None = None,
 ) -> None:
     robot = ElementTree.Element("robot", {"name": robot_name})
     link_names = list(struct.inertial)
@@ -161,6 +162,9 @@ def _write_moveit_seed_urdf(
                 },
             )
 
+    if sensor_frames:
+        from .sensor_frames import append_sensor_frames
+        append_sensor_frames(robot, sensor_frames)
     ElementTree.ElementTree(robot).write(
         path,
         encoding="utf-8",
@@ -1785,6 +1789,7 @@ def export_project(
                 seed_urdf,
                 fix_to_world,
                 root_joint_mode,
+                resolved_sensor_frames(edited_tree, struct.export_name_map),
             )
             generate_smoke_config(
                 Path(save_dir),

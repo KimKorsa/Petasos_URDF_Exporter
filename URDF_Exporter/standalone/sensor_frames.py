@@ -31,7 +31,7 @@ def validate_sensors(tree: dict) -> list[dict]:
     active = {n.get('_link_id') for n, _, _ in entries if not n.get('disabled')}
     existing = {n.get('name') for n, _, _ in entries} | {
         j.get('joint_name') for _, j, _ in entries if j is not None} | {'world', 'base_footprint'}
-    ids, names, frames = set(), set(), set()
+    ids, names, frames, generated = set(), set(), set(), set()
     for index, sensor in enumerate(sensors):
         if not isinstance(sensor, dict):
             errors.append({'message': f'{index + 1}번 센서 형식이 잘못되었습니다.'})
@@ -45,9 +45,11 @@ def validate_sensors(tree: dict) -> list[dict]:
         if not isinstance(name, str) or not ROS_NAME.fullmatch(name) or name in names:
             errors.append({'message': '센서 이름은 고유한 ROS 이름이어야 합니다.'})
         names.add(name)
-        if frame in frames or frame in existing or (frame and frame + '_joint' in existing):
+        generated_names = {frame, frame + '_joint'} if frame else set()
+        if frame in frames or generated_names & (existing | generated):
             errors.append({'message': '센서 프레임 이름이 링크 또는 조인트와 충돌합니다.'})
         frames.add(frame)
+        generated.update(generated_names)
         if sensor.get('type') not in SENSOR_TYPES:
             errors.append({'message': '지원하지 않는 센서 종류입니다.'})
         if sensor.get('parent_link_id') not in active:
@@ -140,7 +142,12 @@ def write_sensor_frames(xacro_path: Path, resolved: list[dict]) -> None:
         return
     ET.register_namespace('xacro', 'http://www.ros.org/wiki/xacro')
     document = ET.parse(xacro_path)
-    robot = document.getroot()
+    append_sensor_frames(document.getroot(), resolved)
+    document.write(xacro_path, encoding='utf-8', xml_declaration=True)
+
+
+def append_sensor_frames(robot: ET.Element, resolved: list[dict]) -> None:
+    """Add frames to an already built URDF/Xacro root after collision checks."""
     existing_links = {element.get('name') for element in robot.iter('link')}
     existing_joints = {element.get('name') for element in robot.iter('joint')}
     frame_names = [sensor['frame'] for sensor in resolved]
@@ -161,4 +168,3 @@ def write_sensor_frames(xacro_path: Path, resolved: list[dict]) -> None:
         })
         ET.SubElement(joint, 'parent', {'link': sensor['parent']})
         ET.SubElement(joint, 'child', {'link': sensor['frame']})
-    document.write(xacro_path, encoding='utf-8', xml_declaration=True)
