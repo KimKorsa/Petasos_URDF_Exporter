@@ -8,6 +8,7 @@ import numpy as np
 from .module_geometry import world_frames, place_module, to_preview, set_world_frame, transform_pick_metadata, rigid, _math
 from .module_library import validate_payload, safe_path
 from .robot_modules import walk_tree, create_module, validate_modules
+from .sensor_frames import sensor_frame_name, validate_sensors
 
 
 class RevisionConflict(ValueError):
@@ -79,6 +80,8 @@ def prepare_module_operation(state, tree, payload, *, parent_link_id, prefix, xy
         for key in ('_preview_transforms', '_cad_snap_features', '_component_material_assignments', '_component_physical'):
             tree[key] = {n: v for n, v in tree.get(key, {}).items() if n not in old_parts}
         tree['_controllers'] = [c for c in tree.get('_controllers', []) if not set(c.get('joints', [])) & old_joints]
+        old_link_ids = set(old['link_ids'])
+        tree['_sensors'] = [s for s in tree.get('_sensors', []) if s.get('parent_link_id') not in old_link_ids]
         tree['_modules'] = [m for m in tree['_modules'] if m['id'] != replace_id]
         parent['children'].remove(mount)
     else:
@@ -96,9 +99,18 @@ def prepare_module_operation(state, tree, payload, *, parent_link_id, prefix, xy
         mapping[controller['name']] = prefix + controller['name']
         if controller.get('id'):
             mapping[controller['id']] = uuid.uuid4().hex
+    for sensor in payload.get('sensors', []):
+        mapping[sensor['id']] = uuid.uuid4().hex
+        mapping[sensor['name']] = prefix + sensor['name']
     occupied = {n['name'] for n, _, _ in walk_tree(tree)} | set(state.get('inertial', {}))
     occupied |= {j['joint_name'] for _, j, _ in walk_tree(tree) if j is not None}
     occupied |= {c['name'] for c in tree.get('_controllers', [])}
+    occupied |= {s['name'] for s in tree.get('_sensors', [])}
+    occupied |= {sensor_frame_name(s['name']) for s in tree.get('_sensors', [])}
+    occupied |= {sensor_frame_name(s['name']) + '_joint' for s in tree.get('_sensors', [])}
+    new_frames = {sensor_frame_name(mapping[s['name']]) for s in payload.get('sensors', [])}
+    if occupied & (new_frames | {name + '_joint' for name in new_frames}):
+        raise ValueError('센서 프레임 이름이 중복됩니다. 다른 Prefix를 사용하세요.')
     for source, existing in (('colors', state.get('colors', {})),
                              ('physical_materials', tree.get('_physical_materials', {}))):
         for name, value in payload.get(source, {}).items():
@@ -128,11 +140,15 @@ def prepare_module_operation(state, tree, payload, *, parent_link_id, prefix, xy
         tree.setdefault(dest, {}).update(placed.get(source, {}))
     tree.setdefault('_preview_transforms', {}).update({n: to_preview(m, tree.get('_preview_units_per_meter', 1000)) for n, m in placed['visual_transforms'].items()})
     tree.setdefault('_controllers', []).extend(placed.get('controllers', []))
+    tree.setdefault('_sensors', []).extend(placed.get('sensors', []))
     module_entries = list(walk_tree(new_root))
     module_name = prefix.rstrip('_')
     tree = create_module(tree, [n['_link_id'] for n, _, _ in module_entries],
                          [j['_joint_id'] for _, j, _ in module_entries if j is not None], module_name)
     tree['_modules'][-1]['prefix'] = prefix
+    sensor_errors = validate_sensors(tree)
+    if sensor_errors:
+        raise ValueError(' / '.join(error['message'] for error in sensor_errors))
     state['tree'] = tree
     # Original CAD joint dictionary is only a seed; keep it coherent for consumers too.
     state['joints'] = {j['joint_name']: {**copy.deepcopy(j.get('joint_info', {})), 'parent': p['name'],

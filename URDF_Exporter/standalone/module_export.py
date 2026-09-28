@@ -9,12 +9,16 @@ ET.register_namespace('xacro', XACRO)
 
 
 def resolve_module_exports(tree, name_map):
+    from .sensor_frames import sensor_frame_name
     result = []
     for module in tree.get('_modules', []):
         try:
+            owned_sensors = [sensor for sensor in tree.get('_sensors', [])
+                             if sensor.get('parent_link_id') in module['link_ids']]
             result.append({'name': module['name'],
                            'links': [name_map['links'][i] for i in module['link_ids']],
-                           'joints': [name_map['joints'][i] for i in module['joint_ids']]})
+                           'joints': [name_map['joints'][i] for i in module['joint_ids']],
+                           'sensor_frames': [sensor_frame_name(s['name']) for s in owned_sensors]})
         except KeyError as exc:
             raise ValueError('비활성/누락된 모듈 링크 또는 조인트는 내보낼 수 없습니다.') from exc
     return result
@@ -36,7 +40,9 @@ def write_module_xacros(description_dir, modules):
         name = module['name']
         if not re.fullmatch('[A-Za-z][A-Za-z0-9_]*', name):
             raise ValueError('잘못된 모듈 파일 이름입니다.')
-        owned = set(module['links']) | set(module['joints'])
+        sensor_frames = set(module.get('sensor_frames', []))
+        owned = set(module['links']) | set(module['joints']) | sensor_frames | {
+            frame + '_joint' for frame in sensor_frames}
         document = ET.Element('robot')
         macro_name = 'petasos_' + name
         macro = ET.SubElement(document, f'{{{XACRO}}}macro', name=macro_name, params="prefix:=''")

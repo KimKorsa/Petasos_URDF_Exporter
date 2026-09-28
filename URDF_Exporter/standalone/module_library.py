@@ -39,6 +39,10 @@ def validate_payload(payload):
     tree = payload['tree']
     if ensure_module_ids(tree) != tree or payload['root_link_id'] != tree['_link_id']:
         raise ValueError('모듈 ID가 올바르지 않습니다.')
+    from .sensor_frames import validate_sensors
+    sensor_errors = validate_sensors({**tree, '_sensors': payload.get('sensors', [])})
+    if sensor_errors:
+        raise ValueError(' / '.join(error['message'] for error in sensor_errors))
     names = {n for link, _, _ in walk_tree(tree) for n in link.get('components', [])}
     if not names or any(set(payload[key]) != names for key in ('inertial', 'materials', 'visual_transforms')):
         raise ValueError('모듈 부품/물성 정보가 누락됐습니다.')

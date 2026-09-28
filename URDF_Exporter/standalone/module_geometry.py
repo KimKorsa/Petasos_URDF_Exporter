@@ -95,6 +95,9 @@ def capture_module(state, tree, module_id):
             transform_pick_metadata(info, inverse, tree.get('_preview_units_per_meter',1000))
             info.pop('link_world_inv_matrix', None)
     joint_names = {joint['joint_name'] for _, joint, _ in walk_tree(subtree) if joint is not None}
+    owned_link_ids = {node['_link_id'] for node, _, _ in walk_tree(subtree)}
+    sensors = [copy.deepcopy(sensor) for sensor in tree.get('_sensors', [])
+               if sensor.get('parent_link_id') in owned_link_ids]
     transforms = {name: (inverse @ components[name]).flatten().tolist() for name in names}
     parts = []
     for part in state.get('parts', []):
@@ -109,6 +112,7 @@ def capture_module(state, tree, module_id):
             parts.append(item)
     return {'format': 'petasos-module', 'version': 1, 'name': module['name'],
             'root_link_id': root['_link_id'], 'tree': subtree, 'parts': parts,
+            'sensors': sensors,
             'inertial': {n: copy.deepcopy(state['inertial'][n]) for n in names},
             'materials': {n: copy.deepcopy(state['materials'][n]) for n in names},
             'colors': copy.deepcopy(state.get('colors', {})), 'visual_transforms': transforms,
