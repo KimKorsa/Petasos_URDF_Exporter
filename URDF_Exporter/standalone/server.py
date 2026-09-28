@@ -607,6 +607,10 @@ class ProjectStore:
         if not isinstance(tree, dict) or not tree.get("name"):
             raise ImportFailure("저장할 프리뷰 편집 데이터가 올바르지 않습니다.")
         tree = ensure_module_ids(tree)
+        from .sensor_frames import validate_sensors
+        sensor_errors = validate_sensors(tree)
+        if sensor_errors:
+            raise ImportFailure(" / ".join(error["message"] for error in sensor_errors))
         module_errors = validate_modules(tree)
         if module_errors:
             raise ImportFailure(" / ".join(error["message"] for error in module_errors))
@@ -1103,7 +1107,7 @@ def create_app(store: ProjectStore | None = None) -> Flask:
 
     @app.get("/static/modules/<filename>")
     def static_modules(filename: str):
-        if filename not in {"module_selection.js", "module_ui.js"}:
+        if filename not in {"module_selection.js", "module_ui.js", "sensor_ui.js"}:
             return "", 404
         return send_from_directory(APP_ROOT / "URDF_Exporter" / "core", filename)
 

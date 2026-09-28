@@ -69,6 +69,7 @@ def _write_moveit_seed_urdf(
     path: str,
     fix_to_world: bool,
     root_joint_mode: str | None = None,
+    sensor_frames: list[dict] | None = None,
 ) -> None:
     robot = ElementTree.Element("robot", {"name": robot_name})
     link_names = list(struct.inertial)
@@ -161,6 +162,9 @@ def _write_moveit_seed_urdf(
                 },
             )
 
+    if sensor_frames:
+        from .sensor_frames import append_sensor_frames
+        append_sensor_frames(robot, sensor_frames)
     ElementTree.ElementTree(robot).write(
         path,
         encoding="utf-8",
@@ -1593,9 +1597,13 @@ def export_project(
     root_joint_mode: str | None = None,
 ) -> dict:
     from .robot_modules import validate_modules
+    from .sensor_frames import validate_sensors, resolved_sensor_frames, write_sensor_frames
     module_errors = validate_modules(edited_tree)
     if module_errors:
         raise ValueError(' / '.join(error['message'] for error in module_errors))
+    sensor_errors = validate_sensors(edited_tree)
+    if sensor_errors:
+        raise ValueError(' / '.join(error['message'] for error in sensor_errors))
     robot_name = state["project_name"].lower()
     if root_joint_mode not in {"world", "base_footprint", "none"}:
         root_joint_mode = "world" if fix_to_world else "none"
@@ -1717,6 +1725,10 @@ def export_project(
         collision_meshes,
         root_joint_mode,
     )
+    write_sensor_frames(
+        Path(save_dir, 'urdf', f'{robot_name}.xacro'),
+        resolved_sensor_frames(edited_tree, struct.export_name_map),
+    )
     Write.write_materials_xacro(export_colors, robot_name, save_dir)
     Write.write_transmissions_xacro(struct.joints, robot_name, save_dir)
     Write.write_gazebo_xacro(
@@ -1777,6 +1789,7 @@ def export_project(
                 seed_urdf,
                 fix_to_world,
                 root_joint_mode,
+                resolved_sensor_frames(edited_tree, struct.export_name_map),
             )
             generate_smoke_config(
                 Path(save_dir),
