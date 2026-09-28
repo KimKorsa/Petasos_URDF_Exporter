@@ -5,6 +5,7 @@ import unittest
 from tests.test_module_geometry import fixture
 from URDF_Exporter.standalone.sensor_frames import (
     create_sensor, update_sensor, delete_sensor, validate_sensors, sensor_frame_name,
+    sensor_world_matrix, set_sensor_world_point,
 )
 
 
@@ -46,3 +47,15 @@ class SensorFramesTests(unittest.TestCase):
         self.assertTrue(validate_sensors(disabled))
         with self.assertRaises(ValueError):
             create_sensor(self.tree, self.root_id, 'camera_x', 'unknown')
+
+    def test_world_pick_uses_rotated_link_local_coordinates(self):
+        sensor = create_sensor(self.tree, self.root_id, 'depth_camera', 'front')['_sensors'][0]
+        sensor['rpy_rad'] = [0, 0, 0.3]
+        link = [0, -1, 0, 1, 1, 0, 0, 2, 0, 0, 1, 3, 0, 0, 0, 1]
+        moved = set_sensor_world_point(sensor, link, [1, 3, 3])
+        self.assertEqual(moved['xyz_m'], [1, 0, 0])
+        self.assertEqual(moved['rpy_rad'], sensor['rpy_rad'])
+        self.assertEqual(sensor['xyz_m'], [0, 0, 0])
+        world = sensor_world_matrix(moved, link)
+        self.assertAlmostEqual(world[3], 1)
+        self.assertAlmostEqual(world[7], 3)

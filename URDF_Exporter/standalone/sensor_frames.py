@@ -3,8 +3,10 @@ import copy
 import math
 import re
 import uuid
+import numpy as np
 
 from .robot_modules import walk_tree
+from .module_geometry import rigid, _math
 
 
 SENSOR_TYPES = {'depth_camera', 'rgb_camera', 'lidar', 'imu', 'generic'}
@@ -93,3 +95,20 @@ def delete_sensor(tree: dict, sensor_id: str) -> dict:
     if len(updated['_sensors']) == len(old):
         raise ValueError('센서를 찾을 수 없습니다.')
     return _valid_copy(updated)
+
+
+def sensor_world_matrix(sensor: dict, link_world_matrix: list[float]) -> list[float]:
+    parent = rigid(link_world_matrix)
+    local = rigid(_math._matrix_from_xyz_rpy(sensor['xyz_m'], sensor['rpy_rad']))
+    return (parent @ local).flatten().tolist()
+
+
+def set_sensor_world_point(sensor: dict, link_world_matrix: list[float], point_world_m: list[float]) -> dict:
+    parent = rigid(link_world_matrix)
+    point = np.array([*point_world_m, 1.0], dtype=float)
+    if point.shape != (4,) or not np.all(np.isfinite(point)):
+        raise ValueError('센서 위치가 올바르지 않습니다.')
+    local = np.linalg.inv(parent) @ point
+    result = copy.deepcopy(sensor)
+    result['xyz_m'] = [float(v) for v in local[:3]]
+    return result
