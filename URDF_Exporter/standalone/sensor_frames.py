@@ -1,0 +1,95 @@
+"""Link-owned sensor frames; metadata only, not simulator plugins."""
+import copy
+import math
+import re
+import uuid
+
+from .robot_modules import walk_tree
+
+
+SENSOR_TYPES = {'depth_camera', 'rgb_camera', 'lidar', 'imu', 'generic'}
+ROS_NAME = re.compile(r'[A-Za-z][A-Za-z0-9_]*\Z')
+
+
+def sensor_frame_name(name: str) -> str:
+    return name if name.endswith('_frame') else name + '_frame'
+
+
+def validate_sensors(tree: dict) -> list[dict]:
+    errors = []
+    sensors = tree.get('_sensors', [])
+    if not isinstance(sensors, list):
+        return [{'message': '센서 목록 형식이 잘못되었습니다.'}]
+    try:
+        entries = list(walk_tree(tree))
+    except (KeyError, TypeError, ValueError) as exc:
+        return [{'message': '로봇 링크 구조를 확인하세요.'}]
+    active = {n.get('_link_id') for n, _, _ in entries if not n.get('disabled')}
+    existing = {n.get('name') for n, _, _ in entries} | {
+        j.get('joint_name') for _, j, _ in entries if j is not None} | {'world', 'base_footprint'}
+    ids, names, frames = set(), set(), set()
+    for index, sensor in enumerate(sensors):
+        if not isinstance(sensor, dict):
+            errors.append({'message': f'{index + 1}번 센서 형식이 잘못되었습니다.'})
+            continue
+        name = sensor.get('name')
+        sid = sensor.get('id')
+        frame = sensor_frame_name(name) if isinstance(name, str) else None
+        if not isinstance(sid, str) or not sid or sid in ids:
+            errors.append({'message': '센서 ID가 없거나 중복되었습니다.'})
+        ids.add(sid)
+        if not isinstance(name, str) or not ROS_NAME.fullmatch(name) or name in names:
+            errors.append({'message': '센서 이름은 고유한 ROS 이름이어야 합니다.'})
+        names.add(name)
+        if frame in frames or frame in existing or (frame and frame + '_joint' in existing):
+            errors.append({'message': '센서 프레임 이름이 링크 또는 조인트와 충돌합니다.'})
+        frames.add(frame)
+        if sensor.get('type') not in SENSOR_TYPES:
+            errors.append({'message': '지원하지 않는 센서 종류입니다.'})
+        if sensor.get('parent_link_id') not in active:
+            errors.append({'message': f'{name or "센서"}의 부착 링크가 없거나 비활성입니다.'})
+        for key in ('xyz_m', 'rpy_rad'):
+            value = sensor.get(key)
+            if not isinstance(value, list) or len(value) != 3 or any(
+                isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)
+                for v in value
+            ):
+                errors.append({'message': f'{name or "센서"}의 {key} 좌표가 잘못되었습니다.'})
+    return errors
+
+
+def _valid_copy(tree):
+    errors = validate_sensors(tree)
+    if errors:
+        raise ValueError(' / '.join(error['message'] for error in errors))
+    return tree
+
+
+def create_sensor(tree: dict, parent_link_id: str, sensor_type: str, name: str) -> dict:
+    updated = copy.deepcopy(tree)
+    updated.setdefault('_sensors', []).append({
+        'id': uuid.uuid4().hex, 'name': name, 'type': sensor_type,
+        'parent_link_id': parent_link_id, 'xyz_m': [0, 0, 0],
+        'rpy_rad': [0, 0, 0], 'settings': {},
+    })
+    return _valid_copy(updated)
+
+
+def update_sensor(tree: dict, sensor_id: str, changes: dict) -> dict:
+    updated = copy.deepcopy(tree)
+    sensor = next((s for s in updated.get('_sensors', []) if s.get('id') == sensor_id), None)
+    if sensor is None:
+        raise ValueError('센서를 찾을 수 없습니다.')
+    for key in ('name', 'type', 'parent_link_id', 'xyz_m', 'rpy_rad'):
+        if key in changes:
+            sensor[key] = copy.deepcopy(changes[key])
+    return _valid_copy(updated)
+
+
+def delete_sensor(tree: dict, sensor_id: str) -> dict:
+    updated = copy.deepcopy(tree)
+    old = updated.get('_sensors', [])
+    updated['_sensors'] = [s for s in old if s.get('id') != sensor_id]
+    if len(updated['_sensors']) == len(old):
+        raise ValueError('센서를 찾을 수 없습니다.')
+    return _valid_copy(updated)
