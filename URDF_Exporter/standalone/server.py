@@ -1107,7 +1107,7 @@ def create_app(store: ProjectStore | None = None) -> Flask:
 
     @app.get("/static/modules/<filename>")
     def static_modules(filename: str):
-        if filename not in {"module_selection.js", "module_ui.js"}:
+        if filename not in {"module_selection.js", "module_ui.js", "sensor_ui.js"}:
             return "", 404
         return send_from_directory(APP_ROOT / "URDF_Exporter" / "core", filename)
 

@@ -19,6 +19,7 @@ HTML_CONTENT = """
     <script src="/static/three/OrbitControls.js"></script>
     <script src="/static/modules/module_selection.js"></script>
     <script src="/static/modules/module_ui.js"></script>
+    <script src="/static/modules/sensor_ui.js"></script>
     <style>
         :root {
             --bg-dark: #1e1e1e;
@@ -703,6 +704,14 @@ HTML_CONTENT = """
             padding: 5px 9px; cursor: pointer; font-size: 10px; font-weight: bold;
         }
         .patcher-toolbar button:hover { background: #45454d; border-color: #1da1f2; }
+        .sensor-link-section { margin-top: 12px; padding: 8px; border: 1px solid #426472; border-radius: 5px; background: #203038; }
+        .sensor-link-section summary { cursor: pointer; color: #b6eaff; font-weight: bold; }
+        .sensor-link-list { display: grid; gap: 4px; margin: 8px 0; }
+        .sensor-link-list button, .sensor-link-section > button, .sensor-properties button { width: 100%; cursor: pointer; padding: 5px 8px; border: 1px solid #547887; border-radius: 4px; background: #25414b; color: #e8faff; text-align: left; }
+        .sensor-properties { display: grid; gap: 9px; }
+        .sensor-properties label { display: grid; gap: 3px; color: #acd2df; font-size: 11px; }
+        .sensor-properties input, .sensor-properties select { min-width: 0; width: 100%; box-sizing: border-box; background: #25282c; color: #fff; border: 1px solid #5e6971; border-radius: 4px; padding: 5px; }
+        .sensor-pose-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
         .patcher-toolbar button.material-shelf-active {
             border-color: #4fb8e5; color: #dff7ff; background: #174056;
             box-shadow: inset 0 0 0 1px rgba(83,207,255,0.13), 0 0 8px rgba(83,207,255,0.18);
@@ -5077,6 +5086,7 @@ HTML_CONTENT = """
                 viewerPointerDown = null;
                 viewerPointerDragged = false;
                 if (!shouldPick) return;
+                if (SensorEditor.pickMode) { SensorEditor.pick(event); return; }
                 if (jointOriginPickMode || groundFacePickMode || baseFootprintPickMode) {
                     suppressViewerDoubleClickUntil = performance.now() + 450;
                     if (jointOriginPickMode) handleJointOriginPick(event);
@@ -5312,6 +5322,7 @@ HTML_CONTENT = """
             ) return;
             previewLastFrameAt = frameTime;
             controls.update();
+            SensorEditor.renderMarker();
             renderer.render(scene, camera);
         }
 
@@ -8494,6 +8505,7 @@ HTML_CONTENT = """
             ) return;
             if (e.key === 'Escape') {
                 e.preventDefault();
+                if (SensorEditor.selectedId) { SensorEditor.clearSelection(); return; }
                 if (ModuleEditor.active) { ModuleEditor.cancel(); return; }
                 hideJointSnapMarker();
                 activeJointSnapMarkerInfo = null;
@@ -12354,6 +12366,11 @@ HTML_CONTENT = """
 
         function updatePanel() {
             const body = document.getElementById('panel-body');
+            if (selectedElement?.type === 'sensor') {
+                const header = document.getElementById('selected-properties-header');
+                if (header) header.textContent = '센서 좌표 속성';
+                SensorEditor.properties(body); return;
+            }
             if (selectedElement?.type === 'module') { ModuleEditor.properties(body, selectedElement.moduleId); return; }
             const nextPanelSelectionIdentity = selectedElement?.controller || selectedElement?.jointObj || selectedElement?.node || null;
             if (nextPanelSelectionIdentity !== panelSelectionIdentity) {
@@ -12472,6 +12489,7 @@ HTML_CONTENT = """
                         <div class="parts-list">${partsHtml}</div>
                     </div>
                     ${componentMaterialEditorHtml(node)}
+                    ${SensorEditor.linkSection(node)}
                     ${(node.components || []).length > 1 ? `
                     <button type="button" class="form-control"
                             onclick="ungroupPatcherLink(selectedElement.node)"
@@ -13624,7 +13642,7 @@ class UIHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(self.server.tree_data).encode('utf-8'))
         elif self.path.startswith('/static/modules/'):
             filename = os.path.basename(self.path)
-            if filename not in {'module_ui.js', 'module_selection.js'}:
+            if filename not in {'module_ui.js', 'module_selection.js', 'sensor_ui.js'}:
                 self.send_response(404)
                 self.end_headers()
                 return
