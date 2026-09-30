@@ -258,7 +258,9 @@ def _mass_properties(part_document) -> dict[str, Any] | None:
         props = part_document.ComponentDefinition.MassProperties
         mass = float(props.Mass)
         center = props.CenterOfMass
-        center_m = [float(center.X) / 100.0, float(center.Y) / 100.0, float(center.Z) / 100.0]
+        # Physical COM follows the manifest's declared assembly length unit (mm).
+        # Inventor's database length unit is cm; the importer converts mm to m once.
+        center_mm = [float(center.X) * 10.0, float(center.Y) * 10.0, float(center.Z) * 10.0]
         moments = list(props.XYZMomentsOfInertia())
         if len(moments) != 6 or mass <= 0:
             return None
@@ -272,7 +274,8 @@ def _mass_properties(part_document) -> dict[str, Any] | None:
             "mass": mass,
             "volume_m3": volume_m3,
             "density": mass / volume_m3 if volume_m3 > 0 else None,
-            "center_of_mass": center_m,
+            "center_of_mass": center_mm,
+            "center_of_mass_units": "mm",
             "inertia": inertia,
             "provenance": "inventor_mass_properties",
             "confidence": 1.0,
