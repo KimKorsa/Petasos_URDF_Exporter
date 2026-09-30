@@ -35,6 +35,7 @@ def _joint_data(urdf_path: Path) -> list[dict]:
                 "lower": lower,
                 "upper": upper,
                 "initial": initial,
+                "mimic_joint": element.find("mimic").get("joint") if element.find("mimic") is not None else None,
             }
         )
     if not joints:
@@ -65,6 +66,15 @@ def generate_smoke_config(
             f"출력 폴더 이름은 {moveit_package}이어야 합니다: {output_dir}"
         )
     joints = _joint_data(urdf_path)
+    urdf_root = ElementTree.parse(urdf_path).getroot()
+    for joint_element in urdf_root.findall("joint"):
+        mimic = joint_element.find("mimic")
+        if mimic is not None and abs(float(mimic.get("offset", "0"))) > 1e-12:
+            raise ValueError(
+                f"{joint_element.get('name')}: Humble GenericSystem ignores nonzero mimic offsets"
+            )
+    driven_joints = [joint for joint in joints if not joint["mimic_joint"]]
+    follower_names = {joint["name"] for joint in joints if joint["mimic_joint"]}
     joint_overrides = joint_overrides or {}
     trajectory_type = 'joint_trajectory_controller/JointTrajectoryController'
     gripper_types = {'position_controllers/GripperActionController', 'effort_controllers/GripperActionController'}
@@ -167,11 +177,11 @@ moveit_setup_assistant_config:
     )
 
     group_joints = "\n".join(
-        f'    <joint name="{joint["name"]}"/>' for joint in joints
+        f'    <joint name="{joint["name"]}"/>' for joint in driven_joints
     )
     home_joints = "\n".join(
         f'    <joint name="{joint["name"]}" value="{_real(joint["initial"])}"/>'
-        for joint in joints
+        for joint in driven_joints
     )
     adjacent = {
         tuple(sorted((joint["parent"], joint["child"])))
@@ -263,6 +273,11 @@ arm:
     groups = []
     claimed = set()
     for raw in controller_groups or []:
+        conflicting = follower_names.intersection(raw.get("joints") or [])
+        if conflicting:
+            raise ValueError(
+                f"Mimic follower {', '.join(sorted(conflicting))} cannot be an independent MoveIt controller target"
+            )
         group_joints = [
             name for name in raw.get("joints") or []
             if name in joint_name_set and name not in claimed
@@ -271,15 +286,15 @@ arm:
             continue
         claimed.update(group_joints)
         groups.append({"name": raw["name"], "joints": group_joints, "type": raw.get('type', trajectory_type)})
-    unassigned = [joint["name"] for joint in joints if joint["name"] not in claimed]
+    unassigned = [joint["name"] for joint in driven_joints if joint["name"] not in claimed]
     if unassigned:
         used_names = {group["name"] for group in groups}
         groups.append({
             "name": "arm_controller" if "arm_controller" not in used_names else "unassigned_controller",
             "joints": unassigned,
         })
-    if not groups and joints:
-        groups = [{"name": "arm_controller", "joints": [joint["name"] for joint in joints]}]
+    if not groups and driven_joints:
+        groups = [{"name": "arm_controller", "joints": [joint["name"] for joint in driven_joints]}]
 
     moveit_controller_names = "\n".join(f"    - {group['name']}" for group in groups)
     moveit_controller_blocks = []

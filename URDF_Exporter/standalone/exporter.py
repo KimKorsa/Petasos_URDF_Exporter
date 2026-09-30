@@ -935,6 +935,60 @@ def _write_analysis(
         json.dump(moveit_readiness, stream, ensure_ascii=False, indent=2)
 
 
+def validate_mimic_control(joints: dict, groups: list[dict]) -> list[dict]:
+    """Report mimic configurations that cannot be represented by one actuator."""
+    errors = []
+    for name, info in joints.items():
+        driver = info.get("mimic_joint")
+        if not driver:
+            continue
+        if driver not in joints or joints[driver].get("type") == "fixed":
+            errors.append({"code": "mimic_missing_driver", "joint": name,
+                           "message": f"{name}: mimic driver {driver} is missing or fixed"})
+            continue
+        seen = {name}
+        cursor = driver
+        while cursor and cursor in joints:
+            if cursor in seen:
+                errors.append({"code": "mimic_cycle", "joint": name,
+                               "message": f"{name}: mimic dependency has a cycle"})
+                break
+            seen.add(cursor)
+            cursor = joints[cursor].get("mimic_joint")
+        else:
+            try:
+                multiplier = float(info.get("mimic_multiplier", 1.0))
+                offset = float(info.get("mimic_offset", 0.0))
+                if not math.isfinite(multiplier) or not math.isfinite(offset):
+                    raise ValueError("nonfinite mimic configuration")
+                if abs(offset) > 1e-12:
+                    errors.append({
+                        "code": "mimic_offset_unsupported", "joint": name,
+                        "message": (
+                            f"{name}: ROS 2 Humble GenericSystem and GazeboSystem ignore "
+                            f"mimic offset {offset}; use zero offset or a verified custom hardware plugin"
+                        ),
+                    })
+                driver_info = joints[driver]
+                if info.get("type") != "continuous" and driver_info.get("type") != "continuous":
+                    mapped = [multiplier * float(driver_info[key]) + offset
+                              for key in ("lower_limit", "upper_limit")]
+                    lower = float(info["lower_limit"])
+                    upper = float(info["upper_limit"])
+                    if min(mapped) < lower - 1e-9 or max(mapped) > upper + 1e-9:
+                        errors.append({"code": "mimic_limit_conflict", "joint": name,
+                                       "message": f"{name}: mimic range {mapped} exceeds follower limits [{lower}, {upper}]"})
+            except (KeyError, TypeError, ValueError, OverflowError):
+                errors.append({"code": "mimic_invalid_limits", "joint": name,
+                               "message": f"{name}: mimic multiplier, offset or limits are invalid"})
+    for group in groups:
+        for name in group.get("joints", []):
+            if joints.get(name, {}).get("mimic_joint"):
+                errors.append({"code": "mimic_follower_controlled", "joint": name,
+                               "message": f"{name}: mimic follower must not be independently commanded by {group.get('name', 'controller')}"})
+    return errors
+
+
 def _controller_groups(joints_dict: dict, edited_tree: dict | None = None) -> list[dict]:
     supported_types = {
         "joint_trajectory_controller/JointTrajectoryController",
@@ -950,9 +1004,16 @@ def _controller_groups(joints_dict: dict, edited_tree: dict | None = None) -> li
     }
     movable = [
         name for name, info in joints_dict.items()
-        if info.get("type") != "fixed"
+        if info.get("type") != "fixed" and not info.get("mimic_joint")
     ]
     movable_set = set(movable)
+    for raw in (edited_tree or {}).get("_controllers") or []:
+        for name in raw.get("joints") or []:
+            if joints_dict.get(name, {}).get("mimic_joint"):
+                raise ValueError(
+                    f"{name}: mimic follower cannot be assigned to a controller; "
+                    "assign its driving joint instead"
+                )
     claimed: set[str] = set()
     # Gazebo support always creates this broadcaster, so a user controller must
     # not overwrite the manager entry with the same YAML key.
@@ -1653,6 +1714,9 @@ def export_project(
             if key in settings:
                 settings[key] = [struct.joint_name_map.get(name, name) for name in settings[key]]
     controller_groups = _controller_groups(struct.joints, controller_tree)
+    mimic_errors = validate_mimic_control(struct.joints, controller_groups)
+    if mimic_errors:
+        raise ValueError(" / ".join(item["message"] for item in mimic_errors))
     _prepare_diff_drive_joint_interfaces(controller_groups, struct.joints)
     normalized_diff_drive_axes = _normalize_diff_drive_wheel_axes(
         controller_groups,

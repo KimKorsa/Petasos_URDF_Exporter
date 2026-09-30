@@ -208,6 +208,13 @@ def write_transmissions_xacro(joints_dict, robot_name, save_dir):
             for name, info in movable_joints:
                 joint = SubElement(control, 'joint')
                 joint.attrib = {'name': name}
+                if info.get('mimic_joint'):
+                    mimic = SubElement(joint, 'param', {'name': 'mimic'})
+                    mimic.text = str(info['mimic_joint'])
+                    multiplier = SubElement(joint, 'param', {'name': 'multiplier'})
+                    multiplier.text = Joint.real_number_text(
+                        float(info.get('mimic_multiplier', 1.0))
+                    )
                 command_name = info.get('command_interface', 'position')
                 command = SubElement(joint, 'command_interface')
                 command.attrib = {'name': command_name}
