@@ -35,6 +35,7 @@ from URDF_Exporter.standalone.importers import (
 )
 from URDF_Exporter.standalone.reimporter import merge_reimported_state
 from URDF_Exporter.standalone.physical_materials import ensure_material_editor_data
+from URDF_Exporter.standalone.physical_migration import repair_legacy_inventor_com
 from URDF_Exporter.standalone.robot_modules import ensure_module_ids, validate_modules
 from URDF_Exporter.standalone.module_api import register_module_api
 from moveit.wsl_runner import WslMoveItRunner
@@ -529,6 +530,7 @@ class ProjectStore:
         self.archive_path: Path | None = None
         self.description_dir: Path | None = None
         self.bundle_dir: Path | None = None
+        self.physical_migration_diagnostics: list[dict] = []
         self._load_last()
 
     def _load_last(self) -> None:
@@ -540,6 +542,10 @@ class ProjectStore:
             if project_dir.is_dir() and state_path.is_file():
                 self.project_dir = project_dir
                 self.state = json.loads(state_path.read_text(encoding="utf-8"))
+                repaired, diagnostics = repair_legacy_inventor_com(self.state, project_dir)
+                self.physical_migration_diagnostics = diagnostics
+                if not diagnostics:
+                    self.state = repaired
         except (OSError, json.JSONDecodeError):
             self.project_dir = None
             self.state = None
@@ -990,6 +996,11 @@ class ProjectStore:
     ) -> dict:
         if not self.state or not self.project_dir:
             raise ImportFailure("먼저 조립품을 불러와야 합니다.")
+        export_state, physical_diagnostics = repair_legacy_inventor_com(
+            self.state, self.project_dir
+        )
+        if physical_diagnostics:
+            raise ImportFailure(" / ".join(item["message"] for item in physical_diagnostics))
         if root_joint_mode == "base_footprint" and not tree.get("_base_footprint_frame"):
             tree["_base_footprint_frame"] = {
                 "world_xyz": [0.0, 0.0, 0.0],
@@ -997,7 +1008,7 @@ class ProjectStore:
                 "yaw": 0.0,
             }
         result = export_project(
-            self.state,
+            export_state,
             tree,
             fix_to_world,
             str(self.project_dir),
@@ -1005,11 +1016,12 @@ class ProjectStore:
             output_root=str(self.export_root),
             root_joint_mode=root_joint_mode,
         )
-        self.state["tree"] = tree
+        export_state["tree"] = tree
         (self.project_dir / "project_state.json").write_text(
-            json.dumps(self.state, ensure_ascii=False, indent=2),
+            json.dumps(export_state, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        self.state = export_state
         self.archive_path = None
         self.description_dir = Path(result["save_dir"])
         self.bundle_dir = (

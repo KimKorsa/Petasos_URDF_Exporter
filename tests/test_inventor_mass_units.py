@@ -40,6 +40,21 @@ class InventorMassUnitTests(unittest.TestCase):
             self.assertAlmostEqual(actual, expected, places=9)
         self.assertAlmostEqual(imported["inertia"][0], 0.01 * 1e-4)
 
+    def test_explicit_physical_center_units_do_not_inherit_assembly_units(self):
+        physical = {
+            "mass": 1.0,
+            "inertia": [1e-4, 1e-4, 1e-4, 0, 0, 0],
+            "center_of_mass": [100.0, 0, 0],
+            "center_of_mass_units": "mm",
+        }
+        in_mm = _manifest_physical({"physical": physical}, length_to_mm=10.0)
+        self.assertAlmostEqual(in_mm["center_of_mass"][0], 0.1)
+
+        physical["center_of_mass"] = [0.1, 0, 0]
+        physical["center_of_mass_units"] = "m"
+        in_m = _manifest_physical({"physical": physical}, length_to_mm=10.0)
+        self.assertAlmostEqual(in_m["center_of_mass"][0], 0.1)
+
 
 if __name__ == "__main__":
     unittest.main()

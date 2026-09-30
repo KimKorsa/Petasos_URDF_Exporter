@@ -585,9 +585,18 @@ def _manifest_physical(spec: dict[str, Any], length_to_mm: float) -> dict[str, A
     if mass <= 0:
         return None
     center = _vector(physical.get("center_of_mass"), [0.0, 0.0, 0.0])
+    center_units = physical.get("center_of_mass_units")
+    if center_units is None:
+        center_scale = length_to_mm / 1000.0
+    elif center_units == "mm":
+        center_scale = 0.001
+    elif center_units == "m":
+        center_scale = 1.0
+    else:
+        raise ImportFailure(f"지원하지 않는 무게중심 단위: {center_units}")
     return {
         "mass": mass,
-        "center_of_mass": [value * length_to_mm / 1000.0 for value in center],
+        "center_of_mass": [value * center_scale for value in center],
         "inertia": inertia,
         "density": physical.get("density"),
         "provenance": "cad_metadata",
