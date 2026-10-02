@@ -6,95 +6,204 @@
 
 [Watch the usage tutorial](https://youtu.be/H9movJFO4Fs)
 
-Petasos imports CAD assemblies, lets you edit robot links and joints, and exports URDF packages for ROS 2.
+**Turn CAD assemblies into editable robot models and ROS 2 packages.**
 
-## Features
+Petasos is a local, browser-based robot editor for importing CAD assemblies,
+organizing links and joints, inspecting robot motion, and exporting URDF/Xacro
+description packages. Its latest A4 development version also adds reusable robot
+modules, link-attached sensor frames, and physical/collision checks before export.
 
-- Connect directly to Autodesk Inventor IAM/IPT assemblies or import files
-- Import STEP, BREP, IGES, and STL files
-- Select parts in 3D, group them into links, and connect or reset joints
-- Set the ground plane and world origin
-- Generate robot description packages for ROS 2 Humble
-- Configure, validate, and launch optional MoveIt packages
-- Synchronize and launch RViz through WSL2
-- Save and restore named editing sessions
-- Reimport updated CAD while preserving existing link and joint edits
+## Version coverage
+
+This README covers both the published exporter and the latest local A4 development
+version. As of October 3, 2026, this documentation update does **not** publish the
+A4 implementation changes to GitHub `main`. The A4 capabilities described below
+are available in the local development version; downloading the current GitHub
+code does not include all of them.
+
+## CAD import and robot editing
+
+- Connect to an open Autodesk Inventor assembly or select an original IAM file
+  so Inventor can resolve its referenced IPT parts.
+- Import STEP/STP, BREP, IGES/IGS, STL, or a `*.petasos.json` assembly.
+- Select parts in the 3D viewer, group them into links, and connect parent and
+  child links in the robot structure tree.
+- Set the ground plane, world origin, joint types, axes, limits, and dynamics.
+- Save and restore named editing sessions.
+- Reimport updated CAD geometry and part positions while preserving matched
+  link groups, names, joint settings, and ground-plane settings. Automatic
+  updates stop if added or removed parts prevent a complete match.
+
+For native assembly formats from other CAD applications, export a STEP file
+that preserves the assembly structure before importing it into Petasos.
+
+## Latest A4 development capabilities
+
+### 3D alignment and motion editing
+
+- Align faces on different links with matching or opposing normals.
+- Mate selected parent and child connection faces to reposition the child link group.
+- Adjust joint axes and zero positions, with an option to cancel a zero-position edit.
+- Align the joint frame toward world axes while preserving its physical motion axis.
+- Preview revolute, continuous, and prismatic motion, and inspect isolated parts or links.
+- Switch the editor interface between English and Korean.
+
+### Mimic joints and controllers
+
+Configure a driving joint, multiplier, and offset for a mimic follower, then
+preview their coupled motion:
+
+```text
+follower_position = multiplier × driver_position + offset
+```
+
+The motion preview supports negative multipliers and nonzero offsets. Export
+validates mimic relationships and controller membership so a follower is not
+commanded as an independent joint. Controller configuration supports trajectory
+and gripper workflows for the ROS 2 Humble target. A Humble
+`GripperActionController` requires a single driving joint with position and
+velocity state interfaces; mimic followers remain dependent joints.
+
+### Materials and physical properties
+
+Use the searchable material library to assign a material to parts or drag a
+material card onto a link to apply it to the entire group. Add custom materials
+with a name, density, and color, or retain the original CAD material.
+
+Density-based assignments update physical properties when the required volume
+or reference data is available. The editor shows an estimated mass where it can;
+parts without sufficient physical data need review. The A4 exporter also repairs
+legacy Inventor center-of-mass data from the original import metadata when that
+metadata is available.
+
+### Reusable robot modules
+
+Manually select links and internal joints with Ctrl+click or area selection,
+define a module, and save it to a local library. Mount the saved module on another
+parent link using a unique prefix, or replace an existing module while retaining
+its mounting joint settings and transform.
+
+- Edit module mounting XYZ/RPY and move the module as a unit.
+- Transfer library entries through ZIP import/export.
+- Undo mounting, replacement, and mounting-transform edits within the server session.
+- Export module contents as separate Xacro files included by the main robot Xacro.
+- Carry module-owned sensor frames with library and export operations.
+
+The initial implementation supports connected end structures with a single
+mounting joint. Root modules, mobile bases, and nested modules are not supported.
+Replacement does not automatically align a new tool's TCP. Stop ROS, replace the
+module, re-export, and review MoveIt configuration before launching again.
+
+### Link-attached sensor frames
+
+Add Depth Camera, RGB Camera, LiDAR, IMU, or Generic sensor records to a link.
+Enter mounting XYZ in millimeters and RPY in degrees, or pick a position on the
+3D surface. Inspect the selected sensor's axes and move it to another link while
+preserving its world mounting pose.
+
+Each sensor exports a meshless, massless `<name>_frame` link and a fixed joint.
+Sensors are saved with the project and included in reusable modules.
+
+This feature creates **URDF/TF mounting frames**. Gazebo sensor plugins, image or
+point-cloud streams, IMU topics, and hardware drivers require separate setup.
+
+### Physical and collision checks before export
+
+The editor prepares a candidate package and shows diagnostics before replacing
+the final output.
+
+| Check | What it reports |
+|---|---|
+| Mass | Nonfinite or nonpositive values |
+| Center of mass | Values outside the link's visual-mesh bounds |
+| Inertia | Invalid or non-positive-definite tensors |
+| Physical-data source | Low-confidence STL or fallback properties |
+| Collision geometry | Simplification ratio and mesh contacts at the start pose |
+| Collision backend | Overlapping candidates that could not be checked exactly |
+
+Physical errors block finalization. Warnings and unchecked items require
+acknowledgment. If preparation or validation fails, the previous successful
+export is preserved. Successful exports include the diagnostic report at
+`analysis/export_preflight.json` inside the description package.
+
+Exact mesh collision checks use `python-fcl` when available. Without it,
+overlapping candidates are marked **not checked**. Checks cover the configured
+start pose and do not establish collision freedom throughout the robot's motion.
+
+## ROS 2, RViz, and MoveIt workflow
+
+Generate a ROS 2 Humble description package for RViz, or choose the MoveIt
+workspace output to include a configuration package. The WSL2 workflow supports:
+
+1. Synchronizing and launching the exported model in RViz.
+2. Opening MoveIt Setup Assistant to configure planning groups, controllers,
+   and the self-collision matrix.
+3. Checking the generated configuration, normalizing relevant YAML numeric
+   parameters, building the workspace, and launching the demo.
+4. Running an automatic planning and demo-controller motion check.
+
+Module replacements or robot structure changes still require a MoveIt review.
+The demo workflow does not configure a physical robot's hardware drivers.
 
 ## Getting started
 
-On a new computer, run the setup script to check and install the required environment:
+The Windows launchers provide the main local workflow. On a new computer, extract
+the project folder completely and run:
 
 ```text
 setup_petasos.cmd
 ```
 
-Once setup is complete, start the editor:
+The setup helper checks Python and the project environment, Inventor integration,
+and the WSL2 / Ubuntu 22.04 / ROS 2 Humble tools used for RViz and MoveIt.
+Installation steps may require confirmation or a restart.
+
+Then start the editor:
 
 ```text
 start_petasos.cmd
 ```
 
-If your browser does not open automatically, visit `http://127.0.0.1:5050/`.
-Closing the command window also stops the Petasos server.
+If the browser does not open automatically, visit `http://127.0.0.1:5050/`.
+Closing the command window stops the local server.
 
 ## Basic workflow
 
-1. Import a CAD assembly or restore a saved editing session.
-2. Check the model orientation, ground plane, and origin in the 3D viewer.
-3. Group parts into links in the structure tree.
-4. Set connection points on the parent and child links, then connect their joint.
-5. Configure joint types, axes, limits, and dynamics.
-6. Choose an output type and click **Generate URDF** (`URDF 생성`).
-7. Run RViz or MoveIt checks from the results screen.
+1. Import an assembly or restore a saved session.
+2. Set the model orientation, ground plane, and world origin.
+3. Group parts into links and connect joints.
+4. Configure axes, limits, dynamics, and motion.
+5. In A4, add materials, mimic relationships, reusable modules, or sensor frames as needed.
+6. Choose the output type and generate the package; in A4, review preflight diagnostics.
+7. Inspect the result in RViz and complete the optional MoveIt setup and checks.
 
-## Supported inputs
+## Output and local storage
 
-- Autodesk Inventor: direct IAM/IPT connection
-- CAD exchange formats: STEP, STP, BREP, IGES, IGS
-- Meshes: STL
-- Petasos assembly exchange format: `*.petasos.json`
+| Location | Contents |
+|---|---|
+| `export/ros_ws/src/` | ROS 2 packages when workspace output is selected |
+| Description package `urdf/` and `meshes/` | Robot URDF/Xacro and mesh assets |
+| Description package `urdf/modules/` | Separate module Xacro files in A4 |
+| Description package `analysis/` | Export diagnostics and analysis |
+| `standalone_projects/` | Local saved projects |
+| `standalone_modules/` | Local reusable module library in A4 |
 
-For native assembly formats from other CAD applications, export a STEP file that
-preserves the assembly structure, then import it into Petasos.
-
-## Updating CAD
-
-After changing geometry or part positions in your CAD application, click
-**Update CAD** (`CAD 업데이트`) at the top of the editor and select the updated
-STEP/CAD file. Petasos matches corresponding parts, preserves link groups, link
-and joint names, joint settings, and ground-plane settings, and applies the new
-geometry, physical properties, and CAD positions.
-
-The initial version applies updates automatically only when every part in the
-original and updated assemblies can be matched. If parts have been added or
-removed, the update stops without changing the existing project.
-
-## Output structure
-
-By default, ROS 2 packages are generated under:
-
-```text
-export/ros_ws/src/
-```
-
-You can view the generated description package in RViz. Selecting MoveIt output
-also generates a MoveIt configuration package in the same workspace.
+Local project, module-library, and generated export directories are excluded from Git.
 
 ## Project structure
 
-- `URDF_Exporter/standalone`: local server, CAD conversion, and URDF export
-- `URDF_Exporter/core`: code derived from the Fusion 360 exporter and shared structure processing
-- `moveit`: MoveIt configuration checks and WSL launch support
-- `tools`: setup helpers for Windows, WSL2, and ROS 2
+- `URDF_Exporter/standalone`: local server, CAD import, project storage, and export
+- `URDF_Exporter/core`: robot structure, exporter code, and editor interface
+- `moveit`: MoveIt configuration checks and WSL launch helpers
+- `tools`: Windows, WSL2, and ROS 2 setup helpers
 - `tests`: automated regression tests
-- `examples`: Petasos assembly exchange examples
-- `schemas`: schemas for the Petasos assembly exchange format
+- `examples` and `schemas`: assembly exchange examples and format schemas
 
 ## Attribution and license
 
-Parts of the Fusion 360 export code in this project are derived from
+Parts of the Fusion 360 export code are derived from
 [syuntoku14/fusion2urdf](https://github.com/syuntoku14/fusion2urdf), created by
-Toshinori Kitamura. The original code is distributed under the MIT License.
+Toshinori Kitamura and distributed under the MIT License.
 
 Copyright for code newly written or extended in Petasos belongs to the Petasos
 contributors. See [LICENSE](LICENSE) for the full license terms.
