@@ -30,7 +30,7 @@ def legacy_fixture(project_dir: Path):
     )
     state = {
         "project_name": "robot",
-        "report": {"source_application": "Autodesk Inventor"},
+        "report": {"source_application": "Autodesk Inventor", "import_mode": "inventor_safe"},
         "tree": {"name": "base_link", "components": ["finger"], "children": []},
         "visual_transforms": {"finger": [1, 0, 0, 0] * 4},
         "inertial": {
@@ -127,9 +127,14 @@ class LegacyInventorPhysicalMigrationTests(unittest.TestCase):
 
             def fake_export(export_state, *_args, **_kwargs):
                 seen_centers.append(export_state["inertial"]["finger"]["center_of_mass"])
-                return {"save_dir": str(Path(temporary) / "export" / "robot_description"), "bundle_dir": None}
+                description = Path(_kwargs["output_root"]) / "robot_description"
+                (description / "analysis").mkdir(parents=True)
+                return {"save_dir": str(description), "bundle_dir": None}
 
-            with mock.patch("URDF_Exporter.standalone.server.export_project", side_effect=fake_export):
+            with mock.patch("URDF_Exporter.standalone.server.export_project", side_effect=fake_export), \
+                 mock.patch("URDF_Exporter.standalone.server.inspect_candidate", return_value={
+                     "status": "ok", "diagnostics": [], "summary": {},
+                 }):
                 store.export(state["tree"], fix_to_world=True)
 
             self.assertEqual(seen_centers, [[-0.119244988, 0.077089474, 0.921020752]])

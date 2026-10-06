@@ -1,7 +1,9 @@
 flask
 trimesh
+python-fcl>=0.7.0.11
 fast-simplification
 numpy
 scipy
+pyyaml
 cadquery-ocp
 pywin32; platform_system == "Windows"

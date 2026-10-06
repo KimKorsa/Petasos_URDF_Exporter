@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-import os, re
+import os, re, json
+from pathlib import Path
 from xml.etree.ElementTree import Element, SubElement
-from . import Link, Joint
+from . import Link, Joint, Actuator
 try:
     from utils import utils
 except ImportError:
@@ -174,6 +175,7 @@ def write_materials_xacro(color_dict, robot_name, save_dir):
         f.write('</robot>\n')
 
 def write_transmissions_xacro(joints_dict, robot_name, save_dir):
+    Actuator.normalize_joints(joints_dict)
     file_name = save_dir + '/urdf/{}.trans'.format(robot_name)
     with open(file_name, mode='w') as f:
         f.write('<?xml version="1.0" ?>\n')
@@ -208,6 +210,11 @@ def write_transmissions_xacro(joints_dict, robot_name, save_dir):
             for name, info in movable_joints:
                 joint = SubElement(control, 'joint')
                 joint.attrib = {'name': name}
+                actuator = info.get('actuator') if info['type'] in ('revolute', 'continuous') else None
+                if actuator:
+                    for key, value in actuator.items():
+                        param = SubElement(joint, 'param', {'name': 'actuator_' + key})
+                        param.text = str(value)
                 if info.get('mimic_joint'):
                     mimic = SubElement(joint, 'param', {'name': 'mimic'})
                     mimic.text = str(info['mimic_joint'])
@@ -245,6 +252,23 @@ def write_transmissions_xacro(joints_dict, robot_name, save_dir):
             control_xml = control_xml.replace("xacro_unless", "xacro:unless")
             f.write(control_xml + '\n')
         f.write('</robot>\n')
+
+def write_actuator_config(joints_dict, save_dir):
+    Actuator.normalize_joints(joints_dict)
+    records = {}
+    for name, joint in joints_dict.items():
+        if joint.get('type') not in ('revolute', 'continuous') or not joint.get('actuator'):
+            continue
+        records[name] = {**joint['actuator'], 'zero_offset_unit': 'output_shaft_rad',
+                         'output_limits': {'max_velocity_rad_s': joint.get('velocity_limit'),
+                                           'max_torque_nm': joint.get('effort_limit')}}
+    path = Path(save_dir, 'config', 'actuators.yaml')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # JSON is a valid YAML document and keeps this exporter free of extra dependencies.
+    path.write_text(json.dumps({'schema_version': 1, 'driver_integration_required': True,
+                               'joints': records}, ensure_ascii=False, indent=2), encoding='utf-8')
+    return path
+
 
 def write_gazebo_xacro(joints_dict, links_xyz_dict, inertial_dict, package_name, robot_name, save_dir):
     file_name = save_dir + '/urdf/' + robot_name + '.gazebo'

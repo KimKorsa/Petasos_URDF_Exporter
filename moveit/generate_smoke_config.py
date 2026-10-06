@@ -54,6 +54,7 @@ def generate_smoke_config(
     output_dir: Path,
     joint_overrides: dict | None = None,
     controller_groups: list[dict] | None = None,
+    planning_groups: list[dict] | None = None,
 ) -> dict:
     description_package = Path(description_package).resolve()
     urdf_path = Path(urdf_path).resolve()
@@ -101,6 +102,17 @@ def generate_smoke_config(
         if joint["type"] != "continuous" and not joint["lower"] <= initial <= joint["upper"]:
             initial = (joint["lower"] + joint["upper"]) / 2.0
         joint["initial"] = initial
+    from URDF_Exporter.standalone.urdf_analysis import zero_positions
+    zero_start_positions = zero_positions(urdf_root)
+    for joint in joints:
+        joint['initial'] = zero_start_positions[joint['name']]
+    if planning_groups is None:
+        from URDF_Exporter.standalone.moveit_groups import resolve_planning_groups
+        reference_joints = {j.get('name'): {'type': j.get('type'),
+            'parent': j.find('parent').get('link'), 'child': j.find('child').get('link'),
+            'mimic_joint': j.find('mimic').get('joint') if j.find('mimic') is not None else None}
+            for j in urdf_root.findall('joint')}
+        planning_groups = resolve_planning_groups({}, {}, reference_joints, controller_groups or [])
     robot_root = ElementTree.parse(urdf_path).getroot()
     all_links = [
         element.get("name")
@@ -118,8 +130,11 @@ def generate_smoke_config(
         "world" if "world" in all_links else "base_link"
     )
 
+    original_output = output_dir
     if output_dir.exists():
-        shutil.rmtree(output_dir)
+        output_dir = output_dir.parent / '.petasos-generated' / output_dir.name
+        if output_dir.exists():
+            raise ValueError('MoveIt 후보 설정이 이미 있습니다. 후보 검토 후 새 출력 경로를 지정하세요.')
     (output_dir / "config").mkdir(parents=True)
     (output_dir / "launch").mkdir()
 
@@ -180,14 +195,18 @@ moveit_setup_assistant_config:
         f'    <joint name="{joint["name"]}"/>' for joint in driven_joints
     )
     home_joints = "\n".join(
-        f'    <joint name="{joint["name"]}" value="{_real(joint["initial"])}"/>'
+        f'    <joint name="{joint["name"]}" value="{_real(zero_start_positions[joint["name"]])}"/>'
         for joint in driven_joints
     )
-    adjacent = {
-        tuple(sorted((joint["parent"], joint["child"])))
-        for joint in joints
-        if "world" not in (joint["parent"], joint["child"])
-    }
+    adjacent = set()
+    for joint in robot_root.findall("joint"):
+        parent = joint.find("parent")
+        child = joint.find("child")
+        if parent is None or child is None:
+            continue
+        pair = (parent.get("link"), child.get("link"))
+        if None not in pair and "world" not in pair:
+            adjacent.add(tuple(sorted(pair)))
     disabled_collisions = "\n".join(
         f'  <disable_collisions link1="{left}" link2="{right}" reason="Adjacent"/>'
         for left, right in sorted(adjacent)
@@ -379,7 +398,8 @@ controller_manager:
         output_dir / "config" / "initial_positions.yaml",
         "initial_positions:\n"
         + "\n".join(
-            f'  {joint["name"]}: {_real(joint["initial"])}' for joint in joints
+            f'  {joint["name"]}: {_real(zero_start_positions[joint["name"]])}'
+            for joint in joints
         ),
     )
     _write(
@@ -448,6 +468,39 @@ Window Geometry:
         "warehouse_db.launch.py": "generate_warehouse_db_launch",
     }
     for filename, generator in launch_generators.items():
+        zero_start_helper = ""
+        zero_start_apply = ""
+        if filename == "demo.launch.py":
+            zero_start_helper = '''from xml.etree import ElementTree
+
+
+def _zero_start_robot_description(robot_description, semantic_description):
+    robot = ElementTree.fromstring(robot_description)
+    semantic = ElementTree.fromstring(semantic_description)
+    home = semantic.find("group_state[@name='home']")
+    if home is None:
+        raise ValueError("MoveIt home state is missing from the SRDF")
+    home_positions = {
+        joint.get("name"): joint.get("value") for joint in home.findall("joint")
+    }
+    for joint in robot.findall("ros2_control/joint"):
+        value = home_positions.get(joint.get("name"))
+        initial = joint.find(
+            "state_interface[@name='position']/param[@name='initial_value']"
+        )
+        if value is not None and initial is not None:
+            initial.text = value
+    return ElementTree.tostring(robot, encoding="unicode")
+
+
+'''
+            zero_start_apply = '''    moveit_config.robot_description["robot_description"] = (
+        _zero_start_robot_description(
+            moveit_config.robot_description["robot_description"],
+            moveit_config.robot_description_semantic["robot_description_semantic"],
+        )
+    )
+'''
         _write(
             output_dir / "launch" / filename,
             f"""
@@ -455,6 +508,7 @@ from moveit_configs_utils import MoveItConfigsBuilder
 from moveit_configs_utils.launches import {generator}
 
 
+{zero_start_helper}
 def generate_launch_description():
     moveit_config = (
         MoveItConfigsBuilder(
@@ -464,16 +518,43 @@ def generate_launch_description():
         .planning_pipelines(pipelines=["ompl"])
         .to_moveit_configs()
     )
+{zero_start_apply}
     return {generator}(moveit_config)
 """,
         )
 
+    srdf_path = output_dir / 'config' / f'{robot_name}.srdf'
+    semantic = ElementTree.parse(srdf_path)
+    for element in list(semantic.getroot()):
+        if element.tag in {'group', 'group_state'}:
+            semantic.getroot().remove(element)
+    for planning in planning_groups:
+        group = ElementTree.SubElement(semantic.getroot(), 'group', name=planning['name'])
+        for name in planning['joints']:
+            ElementTree.SubElement(group, 'joint', name=name)
+        home = ElementTree.SubElement(semantic.getroot(), 'group_state', group=planning['name'], name='home')
+        for name in planning['driven_joints']:
+            ElementTree.SubElement(home, 'joint', name=name, value=_real(zero_start_positions[name]))
+    ElementTree.indent(semantic)
+    semantic.write(srdf_path, encoding='utf-8', xml_declaration=True)
+    kinematics = '\n'.join(f'{g["name"]}:\n  kinematics_solver: kdl_kinematics_plugin/KDLKinematicsPlugin\n  kinematics_solver_search_resolution: 0.005\n  kinematics_solver_timeout: 0.1'
+                           for g in planning_groups if g['chain_supported'])
+    _write(output_dir / 'config' / 'kinematics.yaml', kinematics or '{}\n')
+    ompl_path = output_dir / 'config' / 'ompl_planning.yaml'
+    ompl = ompl_path.read_text(encoding='utf-8').split('\narm:', 1)[0]
+    for planning in planning_groups:
+        ompl += f'\n{planning["name"]}:\n  planner_configs:\n    - RRTConnectkConfigDefault\n'
+    _write(ompl_path, ompl)
+    import json
+    _write(output_dir / 'config' / 'petasos_planning_groups.json', json.dumps(planning_groups, ensure_ascii=False, indent=2))
     return {
         "robot_name": robot_name,
         "package_name": moveit_package,
         "joints": joints,
         "links": links,
         "output_dir": str(output_dir),
+        "preserved_output_dir": str(original_output) if original_output != output_dir else None,
+        "planning_groups": planning_groups,
         "warning": "Smoke-test config disables only adjacent-link collisions.",
     }
 

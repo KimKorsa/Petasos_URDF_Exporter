@@ -364,7 +364,8 @@ def repair_ros2_command_interfaces(
             if re.match(r"^    joints:\s*$", lines[cursor]):
                 names = []
                 for item in lines[cursor + 1:block_end]:
-                    match = re.match(r"^      -\s*([A-Za-z_][A-Za-z0-9_]*)", item)
+                    # YAML sequences can share their mapping key's indentation.
+                    match = re.match(r"^    (?:  )?-\s*([A-Za-z_][A-Za-z0-9_]*)", item)
                     if not match:
                         break
                     names.append(match.group(1))
@@ -403,9 +404,11 @@ def repair_ros2_command_interfaces(
             while end < len(lines):
                 stripped = lines[end].strip()
                 current_indent = len(lines[end]) - len(lines[end].lstrip())
-                if stripped and not stripped.startswith("#") and current_indent <= indent:
-                    break
                 item = re.match(r"^\s*-\s*([A-Za-z_][A-Za-z0-9_]*)", lines[end])
+                if stripped and not stripped.startswith("#") and (
+                    current_indent < indent or (current_indent == indent and not item)
+                ):
+                    break
                 if item:
                     values.append(item.group(1))
                 end += 1

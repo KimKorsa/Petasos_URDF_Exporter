@@ -424,9 +424,9 @@ class RobotStructure:
                     j_info['xyz'] = self._matrix_xyz(joint_local)
                     computed_rpy = self._matrix_rpy(joint_local)
                     if preview_joint_world is not None:
-                        # Manual RPY edits remove the preview world matrix in
-                        # the UI. If it still exists, the picked matrix is the
-                        # authoritative final orientation.
+                        # Picking and manual RPY edits both update this world
+                        # frame together with the component transforms. Derive
+                        # the final local orientation from that same frame.
                         j_info['rpy'] = computed_rpy
                     else:
                         j_info['rpy'] = self._manual_rpy_for_urdf(j_info, computed_rpy)

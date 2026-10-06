@@ -1,6 +1,7 @@
 # PETASOS_SETUP_VERSION=2026.08.03.20
 param(
-    [switch]$CheckOnly
+    [switch]$CheckOnly,
+    [switch]$EditorOnly
 )
 
 Set-StrictMode -Version 2.0
@@ -394,6 +395,29 @@ function Start-RosGuidedSetup {
     }
     Write-Host "Skipped the optional RViz and MoveIt setup."
     return 2
+}
+
+if ($CheckOnly -and $EditorOnly) {
+    if (-not (Test-Path -LiteralPath $VenvPython -PathType Leaf)) {
+        Write-Host "The project-local Python environment is missing."
+        exit 2
+    }
+    # Starting the editor only needs installed modules. Full binary imports
+    # and the optional ROS toolchain are checked by the setup workflow.
+    $editorProbe = @'
+import importlib.util
+import sys
+required = ('flask', 'trimesh', 'numpy', 'scipy', 'OCP')
+missing = [name for name in required if importlib.util.find_spec(name) is None]
+supported = (3, 10) <= sys.version_info[:2] < (3, 14)
+if missing:
+    print('Missing Python modules: ' + ', '.join(missing))
+if not supported:
+    print('Python 3.10 through 3.13 is required.')
+sys.exit(2 if missing or not supported else 0)
+'@
+    & $VenvPython -c $editorProbe
+    exit $LASTEXITCODE
 }
 
 Write-Host "Diagnostic location: $ProjectRoot"

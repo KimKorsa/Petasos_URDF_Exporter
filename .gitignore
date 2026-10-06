@@ -8,3 +8,6 @@ standalone_projects/
 standalone_modules/
 export/
 .worktrees/
+.test-tmp/
+.test_tmp/
+Ogre.log

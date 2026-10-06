@@ -1,3 +1,4 @@
+import ast
 import io
 import inspect
 import json
@@ -11,6 +12,7 @@ from unittest import mock
 from xml.etree import ElementTree
 
 import trimesh
+import xacro
 
 from URDF_Exporter.standalone.server import (
     ProjectStore,
@@ -279,7 +281,7 @@ endsolid triangle
         self.assertIn("patcher-viewport", html)
         self.assertIn("zoomPatcher", html)
         self.assertIn("fitPatcherView", html)
-        self.assertIn("const wasBackgroundClick = patcherPanDrag && !patcherPanDrag.moved", html)
+        self.assertIn("const wasBackgroundClick = !middleButton && patcherPanDrag && !patcherPanDrag.moved", html)
         self.assertIn("if (wasBackgroundClick) clearSelection()", html)
         self.assertIn("function updateSelectedJointFrameVisibility()", html)
         self.assertIn("jointFrame.userData.petasosJoint = child", html)
@@ -327,7 +329,7 @@ endsolid triangle
         self.assertIn("patcher-material-add-card", html)
         self.assertIn("createPhysicalMaterialFromShelf", html)
         self.assertIn("patcher-new-material-density", html)
-        self.assertIn("max-height: calc(100% - 60px)", html)
+        self.assertIn("max-height: calc(100% - 24px)", html)
         self.assertIn("flex-direction: column", html)
         self.assertIn("top: calc(100% + 7px)", html)
         self.assertIn("max-height: min(330px", html)
@@ -339,7 +341,7 @@ endsolid triangle
         self.assertIn("viewport.appendChild(validationStatus)", html)
         self.assertNotIn("overflow: visible; will-change: transform", html)
         self.assertIn("schedulePatcherSharpRepaint", html)
-        self.assertIn("Math.round(rawZoom * 20) / 20", html)
+        self.assertIn("Math.round(rawZoom * 1000) / 1000", html)
         self.assertIn("window.devicePixelRatio", html)
         self.assertIn("border-bottom: 1px solid #446675", html)
         self.assertIn("physicalMaterialLibraryExpanded", html)
@@ -399,10 +401,11 @@ endsolid triangle
         self.assertIn("jointOriginParentSnap", html)
         self.assertIn("refreshJointPickStageViewer", html)
         self.assertIn("applyLinkGroupColors();", html)
-        self.assertIn("1/2 부모 연결점", html)
-        self.assertIn("2/2 자식 연결점", html)
-        self.assertIn("parent_child_surface_frames", html)
-        self.assertIn("gap_m: mateGap / unitsPerMeter", html)
+        self.assertIn("1/2 부모 면", html)
+        self.assertIn("2/2 자식 면", html)
+        self.assertIn("parent_child_face_mate", html)
+        self.assertIn("gap_before_m: mateGapBefore / unitsPerMeter", html)
+        self.assertIn("gap_after_m: mateGapAfter / unitsPerMeter", html)
         self.assertIn("jointFrameFromSurface", html)
         self.assertIn("connected_planar_face_centroid_and_normal", html)
         self.assertIn("user_3d_joint_pick", html)
@@ -416,10 +419,10 @@ endsolid triangle
         self.assertIn("joint-current-input", html)
         self.assertIn("activatePreviewJoint", html)
         self.assertIn("joint-name-button", html)
-        self.assertIn("joint-control.is-selected", html)
+        self.assertNotIn("joint-control.is-selected", html)
         self.assertIn("const connectedColumnGap = 290", html)
-        self.assertIn("const connectedRowGap = 32", html)
-        self.assertIn("restoreImportedAssemblyPose(false)", html)
+        self.assertIn("const connectedRowGap = 72", html)
+        self.assertIn("function restoreImportedAssemblyPose(showStatus = true)", html)
         self.assertIn("jointInfo.initial_position", html)
         self.assertIn("THREE.MathUtils.degToRad(Number(value))", html)
         self.assertIn("_preview_joint_positions", html)
@@ -442,7 +445,7 @@ endsolid triangle
         self.assertIn("extractComponentFromPatcherLink", html)
         self.assertIn("populateLinkPartsList", html)
         self.assertIn("링크에는 최소 한 개의 부품이 남아 있어야 합니다.", html)
-        self.assertIn("remove.textContent = '⊖'", html)
+        self.assertIn('remove.innerHTML = \'<svg', html)
         self.assertNotIn("remove.textContent = '빼기'", html)
         self.assertNotIn("remove.textContent = '⛔'", html)
         self.assertIn('aria-label="조립품 불러오기"', html)
@@ -482,7 +485,7 @@ endsolid triangle
         self.assertIn("현재 이름 유지하고 생성", html)
         self.assertIn("continueExportWithoutStructureRename", html)
         self.assertIn("hasBlockingStructureProblem", html)
-        self.assertIn("미연결 링크 ${structureNamingPlan.disconnectedLinks}개는 뒤 번호로 정리", html)
+        self.assertIn("미연결 링크 ${graphValidation.disconnected.length}개를 배선하거나 병합하세요", html)
         self.assertLess(
             html.index('<div id="grouping-list"></div>'),
             html.index('<div class="pane-grouping-help">'),
@@ -1505,6 +1508,15 @@ endsolid triangle
             "/save",
             json={"tree": tree, "fix_to_world": True, "include_moveit": True},
         )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("mimic driver", response.get_json()["error"])
+        info.pop("mimic_joint")
+        info.pop("mimic_multiplier")
+        info.pop("mimic_offset")
+        response = self.client.post(
+            "/save",
+            json={"tree": tree, "fix_to_world": True, "include_moveit": True},
+        )
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         save_dir = Path(response.get_json()["save_dir"])
         xacro = ElementTree.parse(save_dir / "urdf" / "simple_arm.xacro")
@@ -1515,8 +1527,7 @@ endsolid triangle
         self.assertEqual(exported.find("origin").get("xyz"), "0.1 0.2 0.3")
         self.assertEqual(exported.find("dynamics").get("damping"), "0.15")
         self.assertEqual(exported.find("dynamics").get("friction"), "0.04")
-        self.assertEqual(exported.find("mimic").get("joint"), "joint_master")
-        self.assertEqual(exported.find("mimic").get("multiplier"), "-1.0")
+        self.assertIsNone(exported.find("mimic"))
 
         transmission = ElementTree.parse(save_dir / "urdf" / "simple_arm.trans")
         control_joint = transmission.getroot().find("ros2_control/joint")
@@ -1535,7 +1546,7 @@ endsolid triangle
         self.assertIn("max_deceleration: 2.5", moveit_limits)
         self.assertIn("max_jerk: 8.0", moveit_limits)
 
-    def test_ros2_control_initial_position_is_inside_negative_only_limit(self):
+    def test_export_rejects_zero_outside_negative_only_limit(self):
         self.import_demo()
         tree = self.client.get("/data").get_json()
         joint = tree["children"][0]
@@ -1547,20 +1558,10 @@ endsolid triangle
             "/save",
             json={"tree": tree, "fix_to_world": True},
         )
-        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
-        transmission = ElementTree.parse(
-            Path(response.get_json()["save_dir"])
-            / "urdf"
-            / "simple_arm.trans"
-        ).getroot()
-        control_joint = transmission.find("ros2_control/joint")
-        initial = control_joint.find(
-            "state_interface[@name='position']/param[@name='initial_value']"
-        )
-        self.assertIsNotNone(initial)
-        self.assertEqual(float(initial.text), -2.0)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('영점', response.get_json()['error'])
 
-    def test_petasos_pose_becomes_gazebo_and_moveit_initial_pose(self):
+    def test_moveit_demo_starts_at_zero_without_changing_cad_pose(self):
         self.import_demo()
         tree = self.client.get("/data").get_json()
         joint = tree["children"][0]
@@ -1582,18 +1583,68 @@ endsolid triangle
             "ros2_control/joint/state_interface[@name='position']/param[@name='initial_value']"
         )
         self.assertIsNotNone(initial)
-        self.assertAlmostEqual(float(initial.text), 0.75)
+        self.assertAlmostEqual(float(initial.text), 0.0)
+        xacro_file = Path(payload["save_dir"]) / "urdf" / "simple_arm.xacro"
+        cad_robot = ElementTree.fromstring(xacro.process_file(str(xacro_file)).toxml())
+        initial_xpath = (
+            "ros2_control/joint/state_interface[@name='position']"
+            "/param[@name='initial_value']"
+        )
+        self.assertAlmostEqual(float(cad_robot.find(initial_xpath).text), 0.0)
         moveit_dir = Path(
             payload["bundle_dir"], "src", "simple_arm_moveit_config"
         )
+        launch_source = (moveit_dir / "launch" / "demo.launch.py").read_text(
+            encoding="utf-8"
+        )
+        launch_ast = ast.parse(launch_source)
+        launch_functions = [
+            node for node in launch_ast.body
+            if isinstance(node, ast.FunctionDef)
+        ]
+        class DemoBuilder:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def planning_pipelines(self, **_kwargs):
+                return self
+
+            def to_moveit_configs(self):
+                return type("MoveItConfig", (), {
+                    "robot_description": {
+                        "robot_description": xacro.process_file(str(xacro_file)).toxml()
+                    },
+                    "robot_description_semantic": {
+                        "robot_description_semantic": (
+                            moveit_dir / "config" / "simple_arm.srdf"
+                        ).read_text(encoding="utf-8")
+                    },
+                })()
+
+        namespace = {
+            "ElementTree": ElementTree,
+            "MoveItConfigsBuilder": DemoBuilder,
+            "generate_demo_launch": lambda config: config,
+        }
+        exec(
+            compile(ast.Module(body=launch_functions, type_ignores=[]),
+                    "demo.launch.py", "exec"),
+            namespace,
+        )
+        moveit_robot = ElementTree.fromstring(
+            namespace["generate_launch_description"]()
+            .robot_description["robot_description"]
+        )
+        self.assertAlmostEqual(float(moveit_robot.find(initial_xpath).text), 0.0)
         initial_positions = Path(
             moveit_dir, "config", "initial_positions.yaml"
         ).read_text(encoding="utf-8")
-        self.assertIn("joint_1: 0.75", initial_positions)
+        self.assertIn("joint_1: 0.0", initial_positions)
         srdf = Path(
             moveit_dir, "config", "simple_arm.srdf"
         ).read_text(encoding="utf-8")
-        self.assertIn('<joint name="joint_1" value="0.75"/>', srdf)
+        semantic = ElementTree.fromstring(srdf)
+        self.assertEqual(float(semantic.find("group_state[@name='home']/joint[@name='joint_1']").get('value')), 0.0)
 
     def test_export_rejects_lower_limit_equal_to_or_above_upper(self):
         base = {
@@ -1748,7 +1799,7 @@ endsolid triangle
         server_text = Path("URDF_Exporter/standalone/server.py").read_text(
             encoding="utf-8"
         )
-        start_text = server_text.split("    def start(self, package_dir: Path)", 1)[1]
+        start_text = server_text.split("    def start(self, package_dir: Path,", 1)[1]
         start_text = start_text.split("    def stop(self)", 1)[0]
         self.assertIn("tar -xpf - -C", start_text)
         self.assertIn("target=self._stream_package", start_text)
@@ -2919,22 +2970,34 @@ arm_b:
 <robot name="sample">
   <link name="base_link"/>
   <link name="tip"/>
+  <link name="camera"/>
   <joint name="joint_a" type="revolute">
     <parent link="base_link"/>
     <child link="tip"/>
     <limit lower="-2.0" upper="-1.0" effort="10.0" velocity="1.0"/>
+  </joint>
+  <joint name="camera_mount" type="fixed">
+    <parent link="tip"/>
+    <child link="camera"/>
   </joint>
 </robot>
 """,
             encoding="utf-8",
         )
         output = Path(self.temp_dir.name) / "sample_moveit_config"
+        with self.assertRaisesRegex(ValueError, 'joint_a'):
+            generate_smoke_config(description, urdf, output)
+        document = ElementTree.parse(urdf)
+        document.getroot().find('joint/limit').set('upper', '1.0')
+        document.write(urdf, encoding='utf-8')
         result = generate_smoke_config(description, urdf, output)
-        self.assertEqual(result["joints"][0]["initial"], -1.5)
+        self.assertEqual(result["joints"][0]["initial"], 0.0)
         self.assertIn(
             '<group name="arm">',
             (output / "config" / "sample.srdf").read_text(encoding="utf-8"),
         )
+        semantic = ElementTree.parse(output / 'config' / 'sample.srdf').getroot()
+        self.assertEqual(semantic.find("disable_collisions[@link1='camera'][@link2='tip']").get('reason'), 'Adjacent')
         self.assertIn(
             "max_velocity: 1.0",
             (output / "config" / "joint_limits.yaml").read_text(
@@ -3065,6 +3128,7 @@ arm_b:
         self.assertNotIn(b"\r\n", script)
         self.assertIn(b"ROS_DOMAIN_ID=42", script)
         self.assertIn(b".petasos_runtime/install/setup.bash", script)
+        self.assertIn(b'check_export_runtime.py', script)
 
     def test_moveit_urdf_preflight_rejects_out_of_range_initial_value(self):
         urdf = Path(self.temp_dir.name) / "robot.urdf"
@@ -3173,8 +3237,8 @@ arm_b:
             any("command interfaces must be exactly" in error for error in result["errors"]),
             result,
         )
-        self.assertTrue(
-            any("state interfaces must be exactly" in error for error in result["errors"]),
+        self.assertFalse(
+            any("state interfaces must" in error for error in result["errors"]),
             result,
         )
 
@@ -3517,6 +3581,27 @@ arm_b:
         self.assertIn("? '변경'", html)
         self.assertIn(".ground-origin-secondary,", html)
 
+    def test_changing_preview_up_axis_preserves_root_position_correction(self):
+        html = Path("URDF_Exporter/core/web_ui.py").read_text(encoding="utf-8")
+        axis_block = html[
+            html.index("function setPreviewUpAxis"):
+            html.index("// --- 3D 뷰어 초기화 로직 ---")
+        ]
+        self.assertIn("const previousRootPosition = robotRoot", axis_block)
+        self.assertIn("? robotRoot.position.clone()", axis_block)
+        self.assertIn("robotRoot.position.copy(previousRootPosition)", axis_block)
+        self.assertIn("syncPreviewRootTransform()", axis_block)
+
+    def test_page_exit_flushes_pending_workspace_autosave(self):
+        html = Path("URDF_Exporter/core/web_ui.py").read_text(encoding="utf-8")
+        unload_block = html[
+            html.index("window.addEventListener('beforeunload'"):
+            html.index("function proceedSave()")
+        ]
+        self.assertIn("function flushWorkspaceAutosaveOnUnload", html)
+        self.assertIn("navigator.sendBeacon('/workspace/save'", html)
+        self.assertIn("flushWorkspaceAutosaveOnUnload()", unload_block)
+
     def test_grouping_list_candidate_cards_do_not_repeat_instruction_text(self):
         html = Path("URDF_Exporter/core/web_ui.py").read_text(
             encoding="utf-8",
@@ -3550,7 +3635,7 @@ arm_b:
         self.assertIn("controller.name = controllerNameForType(type, controller)", html)
         properties_block = html[
             html.index('<div class="joint-property-title">Controller Properties</div>'):
-            html.index('컨트롤러 테두리 해제')
+            html.index('컨트롤러 테두리 해제', html.index('<div class="joint-property-title">Controller Properties</div>'))
         ]
         self.assertLess(
             properties_block.index("controllerTypeEditorHtml(controller)"),
@@ -3613,7 +3698,7 @@ arm_b:
         html = Path("URDF_Exporter/core/web_ui.py").read_text(
             encoding="utf-8",
         )
-        self.assertIn("자세를 0으로 설정", html)
+        self.assertIn("현재 자세를 0도로 설정", html)
         self.assertIn('data-set-joint-zero="${index}"', html)
         self.assertIn('button.disabled = Math.abs(numericValue) <= 1e-9', html)
         zero_block = html[
@@ -3636,17 +3721,35 @@ arm_b:
             zero_block.index("previewControllerNeutralZeroWorldFrame(controller, entry)"),
         )
         self.assertIn("previousWorldFrame.clone().multiply(jointMotion)", zero_block)
+        self.assertIn("window.PetasosJointZeroFrame.alignToWorld", zero_block)
         self.assertIn("parentFrame.clone().invert().multiply(worldZeroFrame)", zero_block)
         self.assertNotIn("controller.pivot.matrix.clone()", zero_block)
         self.assertIn("jointInfo.initial_position = 0", zero_block)
-        self.assertIn("shiftJointLimitsForNewZero", zero_block)
+        self.assertNotIn("shiftJointLimitsForNewZero", zero_block)
+        self.assertIn("previous_lower_limit: jointInfo.lower_limit", zero_block)
+        self.assertIn("previous_upper_limit: jointInfo.upper_limit", zero_block)
         self.assertIn("shiftMimicOffsetsForNewZero", zero_block)
         self.assertIn("applyJointZeroDeltaToSubtree", zero_block)
         self.assertIn("jointInfo._zero_calibration_backup", zero_block)
         self.assertIn("world_delta_matrix: worldDelta.toArray()", zero_block)
+        self.assertIn("previous_axis: cloneJsonValue(jointInfo.axis || controller.axis.toArray())", zero_block)
+        self.assertIn("previous_axis_candidates: cloneJsonValue(jointInfo._axis_candidates)", zero_block)
+        self.assertIn("jointInfo.axis = alignedZero.axis", zero_block)
+        self.assertIn("jointInfo._axis_candidates = alignedZero.axisCandidates", zero_block)
         self.assertIn("syncPickedJointLocalFrames();", zero_block)
         self.assertIn("refreshPreviewRig();", zero_block)
         self.assertIn("treeData._preview_joint_positions[joint.joint_name] = 0", zero_block)
+
+    def test_prismatic_limits_can_be_set_from_the_current_preview_position(self):
+        html = Path("URDF_Exporter/core/web_ui.py").read_text(encoding="utf-8")
+        self.assertEqual(html.count("setPreviewPrismaticJointLimit(${index}, 'lower')"), 2)
+        self.assertEqual(html.count("setPreviewPrismaticJointLimit(${index}, 'upper')"), 2)
+        self.assertIn("function setPreviewPrismaticJointLimit(index, bound)", html)
+        self.assertIn("const currentPosition = Math.round(Number(controller.value) * 1000) / 1000", html)
+        self.assertIn("jointInfo.lower_limit = currentPosition", html)
+        self.assertIn("jointInfo.upper_limit = currentPosition", html)
+        self.assertIn("controller.lowerLimit = jointInfo.lower_limit", html)
+        self.assertIn("controller.upperLimit = jointInfo.upper_limit", html)
 
     def test_preview_rig_rebuild_restores_meshes_before_reapplying_joint_pose(self):
         html = Path("URDF_Exporter/core/web_ui.py").read_text(
@@ -3676,8 +3779,10 @@ arm_b:
         self.assertIn("backup.previous_initial_position", revert_block)
         self.assertIn("backup.previous_lower_limit", revert_block)
         self.assertIn("backup.previous_upper_limit", revert_block)
+        self.assertIn("backup.previous_axis", revert_block)
+        self.assertIn("backup.previous_axis_candidates", revert_block)
         self.assertIn("applyJointZeroDeltaToSubtree(entry.node, reverseWorldDelta", revert_block)
-        self.assertIn("shiftJointLimitsForNewZero(jointInfo, controller.type, -zeroOffset)", revert_block)
+        self.assertNotIn("shiftJointLimitsForNewZero", revert_block)
         self.assertIn("shiftMimicOffsetsForNewZero(joint, -zeroOffset)", revert_block)
         self.assertIn("delete jointInfo._zero_offset_calibration", revert_block)
         self.assertIn("delete jointInfo._zero_calibration_backup", revert_block)

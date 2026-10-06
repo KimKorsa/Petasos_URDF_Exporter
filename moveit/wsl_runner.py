@@ -469,6 +469,7 @@ exit "$demo_status"
             raise RuntimeError("MoveIt 자동검사에 필요한 패키지 정보를 찾지 못했습니다.")
 
         helper = shlex.quote(_windows_path_to_wsl(self.smoke_helper_path))
+        integrity_helper = shlex.quote(_windows_path_to_wsl(self.helper_path.with_name('check_export_runtime.py')))
         workspace = shlex.quote(workspace_wsl)
         script = f"""
 set -eo pipefail
@@ -476,6 +477,10 @@ source /opt/ros/humble/setup.bash
 workspace={workspace}
 source "$workspace/.petasos_runtime/install/setup.bash"
 export ROS_DOMAIN_ID={WSL_MOVEIT_DOMAIN_ID}
+if [ -f "$workspace/src/{description_package}/analysis/export_consistency.json" ]; then
+  python3 {integrity_helper} --description "$workspace/src/{description_package}" \
+    --srdf "$workspace/src/{config_package}/config/{robot_name}.srdf" --timeout 3 || true
+fi
 python3 {helper} \
   --srdf "$workspace/src/{config_package}/config/{robot_name}.srdf" \
   --urdf "$workspace/src/{description_package}/urdf/{robot_name}.urdf"

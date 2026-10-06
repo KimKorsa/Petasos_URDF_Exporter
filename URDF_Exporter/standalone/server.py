@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import base64
 import copy
+import hashlib
 import json
 import os
 import re
+import secrets
 import shlex
 import shutil
 import socket
 import subprocess
 import tarfile
 import threading
+import time
 import urllib.error
 import urllib.request
 import webbrowser
@@ -36,6 +39,7 @@ from URDF_Exporter.standalone.importers import (
 from URDF_Exporter.standalone.reimporter import merge_reimported_state
 from URDF_Exporter.standalone.physical_materials import ensure_material_editor_data
 from URDF_Exporter.standalone.physical_migration import repair_legacy_inventor_com
+from URDF_Exporter.standalone.export_preflight import inspect_candidate
 from URDF_Exporter.standalone.robot_modules import ensure_module_ids, validate_modules
 from URDF_Exporter.standalone.module_api import register_module_api
 from moveit.wsl_runner import WslMoveItRunner
@@ -143,6 +147,7 @@ class WslRvizRunner:
         self._process: subprocess.Popen | None = None
         self._linux_pid: int | None = None
         self._stop_requested = False
+        self._auto_recovery_attempted = False
         self._status = "idle"
         self._message = "RViz 실행 대기 중"
         self._output: list[str] = []
@@ -310,10 +315,8 @@ class WslRvizRunner:
                 if found:
                     hwnd, title = found[0]
                     if self._is_wslg_copy_mode(title):
-                        self._set_state(
-                            "error",
-                            "WSLg 화면 연결 오류로 RViz 창이 투명하게 표시됩니다. "
-                            "다른 WSL 작업을 저장한 뒤 PowerShell에서 wsl --shutdown을 실행하고 RViz를 다시 여세요.",
+                        self._begin_wslg_recovery(
+                            "WSLg 화면 연결 오류로 RViz 창이 투명하게 표시됩니다."
                         )
                         return
                     user32.ShowWindowAsync(hwnd, 9)  # SW_RESTORE
@@ -333,13 +336,86 @@ class WslRvizRunner:
         with self._lock:
             process_running = self._process is not None and self._process.poll() is None
         if process_running:
-            self._set_state(
-                "error",
-                "RViz 프로세스는 실행 중이지만 Windows 창을 확인하지 못했습니다. "
-                "WSLg 상태를 확인하거나 다른 WSL 작업을 저장한 뒤 wsl --shutdown을 실행해 주세요.",
+            self._begin_wslg_recovery(
+                "RViz 프로세스는 실행 중이지만 Windows 화면에서 창을 찾지 못했습니다."
             )
 
-    def start(self, package_dir: Path) -> dict:
+    def _begin_wslg_recovery(self, reason: str) -> None:
+        with self._lock:
+            if self._auto_recovery_attempted or self._stop_requested:
+                return
+            package_dir = getattr(self, "_package_dir", None)
+            if package_dir is None:
+                self._status = "error"
+                self._message = reason + " WSLg 자동 복구에 필요한 패키지 경로가 없습니다."
+                return
+            self._auto_recovery_attempted = True
+            self._status = "recovering"
+            self._message = (
+                reason
+                + " WSLg 복구를 위해 모든 WSL 배포판을 종료한 뒤 RViz를 한 번 다시 실행합니다."
+            )
+        threading.Thread(
+            target=self._recover_wslg,
+            args=(package_dir,),
+            daemon=True,
+        ).start()
+
+    def _recover_wslg(self, package_dir: Path) -> None:
+        old_process = None
+        try:
+            result = subprocess.run(
+                ["wsl.exe", "--shutdown"],
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=40,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            if result.returncode != 0:
+                detail = (result.stderr or result.stdout or "").strip()
+                raise RuntimeError(detail or f"wsl --shutdown 종료 코드 {result.returncode}")
+
+            with self._lock:
+                if self._stop_requested:
+                    self._status = "stopped"
+                    self._message = "사용자 요청으로 WSLg 자동 복구를 취소했습니다."
+                    return
+                old_process = self._process
+
+            if old_process is not None and old_process.poll() is None:
+                try:
+                    old_process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    old_process.terminate()
+                    try:
+                        old_process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        old_process.kill()
+                        old_process.wait(timeout=2)
+
+            with self._lock:
+                if self._stop_requested:
+                    self._status = "stopped"
+                    self._message = "사용자 요청으로 WSLg 자동 복구를 취소했습니다."
+                    return
+                if self._process is old_process:
+                    self._process = None
+                    self._linux_pid = None
+
+            self.start(package_dir, _recovery_retry=True)
+        except Exception as exc:
+            with self._lock:
+                if self._stop_requested:
+                    self._status = "stopped"
+                    self._message = "사용자 요청으로 WSLg 자동 복구를 취소했습니다."
+                else:
+                    self._status = "error"
+                    self._message = f"WSLg 자동 복구 후 RViz 재실행에 실패했습니다: {exc}"
+
+    def start(self, package_dir: Path, _recovery_retry: bool = False) -> dict:
         package_dir = Path(package_dir).resolve()
         package_name = package_dir.name
         if not re.fullmatch(r"[a-z][a-z0-9_]*", package_name):
@@ -357,6 +433,9 @@ class WslRvizRunner:
             self._output = []
             self._linux_pid = None
             self._stop_requested = False
+            self._package_dir = package_dir
+            if not _recovery_retry:
+                self._auto_recovery_attempted = False
 
         quoted_package = shlex.quote(package_name)
         script = f"""
@@ -531,6 +610,8 @@ class ProjectStore:
         self.description_dir: Path | None = None
         self.bundle_dir: Path | None = None
         self.physical_migration_diagnostics: list[dict] = []
+        self._pending_export: dict | None = None
+        self._cleanup_export_leftovers()
         self._load_last()
 
     def _load_last(self) -> None:
@@ -987,7 +1068,57 @@ class ProjectStore:
             ),
         )
 
-    def export(
+    def _export_fingerprint(self) -> str:
+        payload = json.dumps(self.state, ensure_ascii=False, sort_keys=True)
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def _owned_export_stage(self, path: Path) -> Path:
+        root = self.export_root.resolve()
+        target = Path(path).resolve()
+        if target.parent != root or not target.name.startswith(".petasos-stage-"):
+            raise ValueError(f"Export stage is outside the selected export root: {target}")
+        return target
+
+    def _prune_export_backups(self, keep: Path | None = None) -> None:
+        """Keep at most one previous-export backup (``keep`` or the newest)."""
+        try:
+            root = self.export_root.resolve()
+            backups = [
+                path for path in root.glob(".petasos-backup-*")
+                if path.is_dir() and path.parent == root
+            ]
+            if not backups:
+                return
+            if keep is None or Path(keep).resolve() not in {b.resolve() for b in backups}:
+                keep = max(backups, key=lambda path: path.stat().st_mtime)
+            keep = Path(keep).resolve()
+            for path in backups:
+                if path.resolve() != keep:
+                    shutil.rmtree(path, ignore_errors=True)
+        except OSError:
+            pass
+
+    def _cleanup_export_leftovers(self) -> None:
+        """Remove stage folders orphaned by an interrupted export and old backups."""
+        try:
+            root = self.export_root.resolve()
+            for path in root.glob(".petasos-stage-*"):
+                if path.is_dir() and path.parent == root:
+                    shutil.rmtree(path, ignore_errors=True)
+            self._prune_export_backups()
+        except OSError:
+            pass
+
+    def cancel_export(self, token: str) -> None:
+        pending = self._pending_export
+        if pending is None or pending["token"] != token:
+            raise ValueError("Export token is no longer valid")
+        stage = self._owned_export_stage(pending["stage"])
+        if stage.is_dir():
+            shutil.rmtree(stage)
+        self._pending_export = None
+
+    def prepare_export(
         self,
         tree: dict,
         fix_to_world: bool,
@@ -996,40 +1127,134 @@ class ProjectStore:
     ) -> dict:
         if not self.state or not self.project_dir:
             raise ImportFailure("먼저 조립품을 불러와야 합니다.")
+        if self._pending_export is not None:
+            self.cancel_export(self._pending_export["token"])
         export_state, physical_diagnostics = repair_legacy_inventor_com(
             self.state, self.project_dir
         )
         if physical_diagnostics:
             raise ImportFailure(" / ".join(item["message"] for item in physical_diagnostics))
-        if root_joint_mode == "base_footprint" and not tree.get("_base_footprint_frame"):
-            tree["_base_footprint_frame"] = {
+        export_tree = copy.deepcopy(tree)
+        if root_joint_mode == "base_footprint" and not export_tree.get("_base_footprint_frame"):
+            export_tree["_base_footprint_frame"] = {
                 "world_xyz": [0.0, 0.0, 0.0],
                 "rpy": [0.0, 0.0, 0.0],
                 "yaw": 0.0,
             }
-        result = export_project(
-            export_state,
-            tree,
-            fix_to_world,
-            str(self.project_dir),
-            include_moveit=include_moveit,
-            output_root=str(self.export_root),
-            root_joint_mode=root_joint_mode,
-        )
-        export_state["tree"] = tree
-        (self.project_dir / "project_state.json").write_text(
-            json.dumps(export_state, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        self.state = export_state
+        token = secrets.token_urlsafe(18)
+        stage = self._owned_export_stage(self.export_root / f".petasos-stage-{token}")
+        stage.mkdir()
+        try:
+            result = export_project(
+                export_state, export_tree, fix_to_world, str(self.project_dir),
+                include_moveit=include_moveit, output_root=str(stage),
+                root_joint_mode=root_joint_mode,
+            )
+            description = Path(result["save_dir"]).resolve()
+            description.relative_to(stage)
+            moveit_dir = None
+            if result.get("bundle_dir"):
+                moveit_candidates = sorted((Path(result["bundle_dir"]) / "src").glob("*_moveit_config"))
+                moveit_dir = moveit_candidates[0] if moveit_candidates else None
+            if moveit_dir is not None:
+                from .moveit_groups import preserve_assistant_config
+                previous = self.export_root / 'ros_ws' / 'src' / moveit_dir.name
+                settings_report = preserve_assistant_config(previous, moveit_dir, Path(result['bundle_dir']), description)
+                if settings_report:
+                    result['moveit_settings'] = settings_report
+            preflight = inspect_candidate(description, moveit_dir)
+            if result.get('moveit_settings', {}).get('review_files'):
+                preflight['diagnostics'].append({
+                    'code': 'moveit_settings_review_required', 'severity': 'warning', 'targets': [moveit_dir.name],
+                    'observed': result['moveit_settings']['review_files'], 'expected': '현재 컨트롤러·모듈 설정과 일치',
+                    'action': result['moveit_settings']['message'] + ' (' + result['moveit_settings']['previous_relative_path'] + ')'})
+                preflight['status'] = 'error' if preflight['status'] == 'error' else 'warning'
+                preflight['summary']['warnings'] = preflight['summary'].get('warnings', 0) + 1
+            analysis = description / "analysis"
+            analysis.mkdir(exist_ok=True)
+            (analysis / "export_preflight.json").write_text(
+                json.dumps(preflight, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            self._pending_export = {
+                "token": token, "stage": stage, "result": result,
+                "report": preflight, "state": export_state, "tree": export_tree,
+                "revision": self.revision, "fingerprint": self._export_fingerprint(),
+                "prepared_at": time.monotonic(),
+            }
+            return {"token": token, "preflight": preflight,
+                    "link_count": result.get("link_count"), "joint_count": result.get("joint_count")}
+        except Exception:
+            if stage.is_dir():
+                shutil.rmtree(self._owned_export_stage(stage))
+            raise
+
+    def commit_export(self, token: str, acknowledge_warnings: bool) -> dict:
+        pending = self._pending_export
+        if pending is None or pending["token"] != token:
+            raise ValueError("Export token is no longer valid")
+        if (self.revision != pending["revision"] or
+                self._export_fingerprint() != pending["fingerprint"] or
+                time.monotonic() - pending["prepared_at"] > 600):
+            raise ValueError("프로젝트가 변경됐거나 준비 시간이 만료됐습니다. 다시 익스포트해 주세요.")
+        report = pending["report"]
+        if any(item["severity"] == "error" for item in report["diagnostics"]):
+            raise ValueError("Preflight error: 물성 오류를 수정한 뒤 다시 익스포트해 주세요.")
+        if not acknowledge_warnings and any(
+            item["severity"] in {"warning", "not_checked"} for item in report["diagnostics"]
+        ):
+            raise ValueError("Preflight warning: 경고와 미검사 항목을 확인해 주세요.")
+        stage = self._owned_export_stage(pending["stage"])
+        result = pending["result"]
+        staged_payload = Path(result["bundle_dir"] or result["save_dir"]).resolve()
+        if staged_payload.parent != stage:
+            raise ValueError("Prepared export payload is outside its stage")
+        target = self.export_root.resolve() / staged_payload.name
+        if target.parent != self.export_root.resolve():
+            raise ValueError("Export destination is outside the selected root")
+        backup = self.export_root.resolve() / f".petasos-backup-{token}"
+        if backup.exists():
+            raise ValueError("Export backup path already exists")
+        state_path = self.project_dir / "project_state.json"
+        state_temp = self.project_dir / f".project_state-{token}.json"
+        saved_state = copy.deepcopy(pending["state"])
+        saved_state["tree"] = pending["tree"]
+        state_temp.write_text(json.dumps(saved_state, ensure_ascii=False, indent=2), encoding="utf-8")
+        moved_old = False
+        moved_new = False
+        try:
+            if target.exists():
+                os.replace(target, backup)
+                moved_old = True
+            os.replace(staged_payload, target)
+            moved_new = True
+            os.replace(state_temp, state_path)
+        except Exception:
+            if moved_new and target.exists():
+                os.replace(target, staged_payload)
+            if moved_old and backup.exists():
+                os.replace(backup, target)
+            state_temp.unlink(missing_ok=True)
+            raise
+        self.state = saved_state
         self.archive_path = None
-        self.description_dir = Path(result["save_dir"])
-        self.bundle_dir = (
-            Path(result["bundle_dir"])
-            if result.get("bundle_dir")
-            else None
-        )
-        return result
+        relative_description = Path(result["save_dir"]).resolve().relative_to(staged_payload)
+        self.description_dir = target / relative_description
+        self.bundle_dir = target if result.get("bundle_dir") else None
+        self._pending_export = None
+        if stage.is_dir():
+            shutil.rmtree(stage, ignore_errors=True)
+        self._prune_export_backups(keep=backup if moved_old else None)
+        return {**result, "save_dir": str(self.description_dir),
+                "bundle_dir": str(self.bundle_dir) if self.bundle_dir else None,
+                "preflight": report,
+                "previous_export_backup": str(backup) if moved_old else None}
+
+    def export(
+        self, tree: dict, fix_to_world: bool, include_moveit: bool = False,
+        root_joint_mode: str | None = None, acknowledge_warnings: bool = False,
+    ) -> dict:
+        prepared = self.prepare_export(tree, fix_to_world, include_moveit, root_joint_mode)
+        return self.commit_export(prepared["token"], acknowledge_warnings)
 
 
 def create_app(store: ProjectStore | None = None) -> Flask:
@@ -1039,10 +1264,16 @@ def create_app(store: ProjectStore | None = None) -> Flask:
 
     @app.before_request
     def lock_editor_mutations():
+        if request.method == 'POST' and request.is_json:
+            payload = request.get_json(silent=True)
+            if not isinstance(payload, dict):
+                return jsonify(error='Request body must be a JSON object.'), 400
+            if 'tree' in payload and not isinstance(payload['tree'], dict):
+                return jsonify(error='Robot tree must be a JSON object.'), 400
         if request.method == 'POST' or request.path == '/data':
             project_store.module_lock.acquire()
             g.module_lock_held = True
-        if request.path in {'/workspace/save', '/save'}:
+        if request.path in {'/workspace/save', '/save', '/export/prepare'}:
             payload = request.get_json(silent=True) or {}
             tree = payload.get('tree') or payload
             if (tree.get('_modules') or (project_store.state or {}).get('tree', {}).get('_modules')):
@@ -1119,7 +1350,11 @@ def create_app(store: ProjectStore | None = None) -> Flask:
 
     @app.get("/static/modules/<filename>")
     def static_modules(filename: str):
-        if filename not in {"module_selection.js", "module_ui.js", "sensor_ui.js"}:
+        if filename not in {
+            "module_selection.js", "module_ui.js", "sensor_ui.js",
+            "mimic_preview.js", "face_alignment.js", "joint_zero_frame.js",
+            "joint_mate_alignment.js", "controller_interfaces.js",
+        }:
             return "", 404
         return send_from_directory(APP_ROOT / "URDF_Exporter" / "core", filename)
 
@@ -1249,27 +1484,62 @@ def create_app(store: ProjectStore | None = None) -> Flask:
         except Exception as exc:
             return jsonify({"error": f"원본 IAM 업데이트 실패: {exc}"}), 500
 
-    @app.post("/save")
-    def save():
+    def _export_payload():
+        payload = request.get_json(silent=True) or {}
+        return payload, payload.get("tree") or {}, bool(payload.get("fix_to_world", True)), bool(payload.get("include_moveit", False)), payload.get("root_joint_mode")
+
+    @app.post("/export/prepare")
+    def export_prepare():
+        _payload, tree, fixed, moveit, root_mode = _export_payload()
+        try:
+            return jsonify(project_store.prepare_export(tree, fixed, moveit, root_mode))
+        except (ImportFailure, ValueError) as exc:
+            return jsonify({"error": str(exc)}), 400
+        except Exception as exc:
+            return jsonify({"error": f"익스포트 검사 실패: {exc}"}), 500
+
+    @app.post("/export/commit")
+    def export_commit():
         payload = request.get_json(silent=True) or {}
         try:
-            result = project_store.export(
-                payload.get("tree") or {},
-                bool(payload.get("fix_to_world", True)),
-                bool(payload.get("include_moveit", False)),
-                payload.get("root_joint_mode"),
+            result = project_store.commit_export(
+                str(payload.get("token") or ""), bool(payload.get("acknowledge_warnings", False)),
             )
-            return jsonify({
-                "status": "ok",
-                "save_dir": result["save_dir"],
-                "bundle_dir": result["bundle_dir"],
-                "include_moveit": result["include_moveit"],
-                "download_url": None,
-                "link_count": result["link_count"],
-                "joint_count": result["joint_count"],
-                "moveit_readiness": result["moveit_readiness"],
-            })
-        except ImportFailure as exc:
+            return jsonify({"status": "ok", **result, "download_url": None})
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 409
+        except Exception as exc:
+            return jsonify({"error": f"익스포트 반영 실패: {exc}"}), 500
+
+    @app.post("/export/cancel")
+    def export_cancel():
+        payload = request.get_json(silent=True) or {}
+        try:
+            project_store.cancel_export(str(payload.get("token") or ""))
+            return jsonify({"status": "cancelled"})
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+
+    @app.post("/save")
+    def save():
+        payload, tree, fixed, moveit, root_mode = _export_payload()
+        try:
+            prepared = project_store.prepare_export(tree, fixed, moveit, root_mode)
+            report = prepared["preflight"]
+            # The editor uses prepare/commit and requires an explicit checkbox.
+            # Older /save integrations have no review step; retain their API
+            # behavior while returning the full diagnostic report to callers.
+            acknowledged = bool(payload.get("acknowledge_warnings", True))
+            if any(item["severity"] == "error" for item in report["diagnostics"]):
+                project_store.cancel_export(prepared["token"])
+                return jsonify({"error": "익스포트 전 물성 오류를 수정해 주세요.", **prepared}), 422
+            if not acknowledged and any(
+                item["severity"] in {"warning", "not_checked"} for item in report["diagnostics"]
+            ):
+                return jsonify({"error": "경고·미검사 항목을 확인하고 승인해 주세요.", **prepared}), 409
+            result = project_store.commit_export(prepared["token"], acknowledged)
+            return jsonify({"status": "ok", **result, "download_url": None})
+        except (ImportFailure, ValueError) as exc:
             return jsonify({"error": str(exc)}), 400
         except Exception as exc:
             return jsonify({"error": f"URDF 생성 실패: {exc}"}), 500
@@ -1429,6 +1699,15 @@ def _petasos_server_is_healthy(port: int) -> bool:
         return False
 
 
+def _open_browser_when_ready(port: int, url: str) -> None:
+    deadline = time.monotonic() + 15.0
+    while time.monotonic() < deadline:
+        if _petasos_server_is_healthy(port):
+            webbrowser.open(url)
+            return
+        time.sleep(0.1)
+
+
 def run() -> bool:
     port = int(os.environ.get("PETASOS_PORT", "5050"))
     url = f"http://127.0.0.1:{port}/"
@@ -1450,6 +1729,8 @@ def run() -> bool:
 
     app = create_app()
     if os.environ.get("PETASOS_NO_BROWSER") != "1":
-        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+        threading.Thread(
+            target=_open_browser_when_ready, args=(port, url), daemon=True
+        ).start()
     app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
     return True

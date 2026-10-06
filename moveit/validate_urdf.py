@@ -197,9 +197,11 @@ def validate_urdf_for_moveit(
                 f"found {sorted(command_names)}"
             )
         position_state = control_joint.find("state_interface[@name='position']")
-        if state_names not in ({"position"}, {"position", "velocity"}):
+        # Hardware may expose effort feedback even when the trajectory
+        # controller only claims position/velocity state interfaces.
+        if "position" not in state_names or not state_names <= {"position", "velocity", "effort"}:
             errors.append(
-                f"{name}: state interfaces must be exactly [position] or [position, velocity], "
+                f"{name}: state interfaces must include position and use only position, velocity, effort, "
                 f"found {sorted(state_names)}"
             )
         if position_state is None:

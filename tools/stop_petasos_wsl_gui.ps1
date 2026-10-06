@@ -1,7 +1,7 @@
 $ErrorActionPreference = "SilentlyContinue"
 $distro = "Ubuntu-22.04"
 
-$registered = (& wsl.exe --list --quiet 2>$null | Out-String) -replace "`0", ""
+$registered = (& wsl.exe --list --running --quiet 2>$null | Out-String) -replace "`0", ""
 if ($registered -notmatch "(?im)^\s*Ubuntu-22\.04\s*$") {
     exit 0
 }

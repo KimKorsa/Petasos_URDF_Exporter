@@ -10,7 +10,7 @@ if not exist "%~dp0tools\setup_petasos.ps1" (
     exit /b 2
 )
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\setup_petasos.ps1" -CheckOnly
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\setup_petasos.ps1" -CheckOnly -EditorOnly
 if errorlevel 1 (
     echo.
     echo Petasos runtime setup is incomplete. Starting the guided installer now.
@@ -40,14 +40,6 @@ if not defined PETASOS_PYTHON if exist "%LOCALAPPDATA%\Programs\Python\Python314
 
 if not defined PETASOS_PYTHON (
     echo Python could not be found.
-    echo Run setup_petasos.cmd first.
-    pause
-    exit /b 1
-)
-
-"%PETASOS_PYTHON%" -c "import flask, trimesh, numpy, scipy, OCP" >nul 2>&1
-if not "%ERRORLEVEL%"=="0" (
-    echo Petasos Python packages are missing or incomplete.
     echo Run setup_petasos.cmd first.
     pause
     exit /b 1

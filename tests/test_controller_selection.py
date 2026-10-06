@@ -25,6 +25,19 @@ class ControllerSelectionTests(unittest.TestCase):
         self.assertIn('컨트롤러 속성', HTML_CONTENT)
         self.assertIn('controllerTypeEditorHtml(controller)', HTML_CONTENT)
 
+    def test_export_stops_on_interface_mismatch_and_focuses_joint_properties(self):
+        self.assertIn('/static/modules/controller_interfaces.js', HTML_CONTENT)
+        self.assertIn('controllerInterfaceIssues()', HTML_CONTENT)
+        self.assertIn('interface-error', HTML_CONTENT)
+        self.assertIn('applyDetectedControllerInterfaceIssue', HTML_CONTENT)
+        from pathlib import Path
+        server_source = (Path(__file__).parents[1] / 'URDF_Exporter' / 'standalone' / 'server.py').read_text(encoding='utf-8')
+        self.assertIn('"joint_mate_alignment.js", "controller_interfaces.js"', server_source)
+        self.assertLess(
+            HTML_CONTENT.index('const interfaceIssues = controllerInterfaceIssues();'),
+            HTML_CONTENT.index('showExportProgress(includeMoveIt);', HTML_CONTENT.index('function proceedSave()')),
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

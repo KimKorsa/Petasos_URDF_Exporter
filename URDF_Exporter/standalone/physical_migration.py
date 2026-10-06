@@ -25,11 +25,18 @@ def repair_legacy_inventor_com(state: dict, project_dir: Path) -> tuple[dict, li
     result = copy.deepcopy(state)
     if result.get("physical_com_schema", 0) >= 2:
         return result, []
-    if (result.get("report") or {}).get("source_application") != "Autodesk Inventor":
+    report = result.get("report") or {}
+    if report.get("source_application") != "Autodesk Inventor":
         return result, []
 
     source_path = Path(project_dir) / "sources" / "inventor-import.petasos.json"
     if not source_path.is_file():
+        # A third-party upload can claim Inventor as its source application;
+        # only direct adapter imports are known to have the historical bug.
+        other_manifests = list((Path(project_dir) / "sources").glob("*.petasos.json"))
+        if (other_manifests or
+                report.get("import_mode") not in {"inventor_safe", "inventor_direct"}):
+            return result, []
         return result, [{
             "code": "legacy_inventor_manifest_missing",
             "severity": "error",

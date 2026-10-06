@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import io
 import json
 import math
 import os
@@ -16,7 +17,7 @@ from xml.etree import ElementTree
 import numpy as np
 import trimesh
 
-from URDF_Exporter.core import Structure, Write
+from URDF_Exporter.core import Structure, Write, Actuator
 from URDF_Exporter.standalone.physical_materials import apply_material_overrides
 from moveit.generate_smoke_config import generate_smoke_config
 
@@ -182,8 +183,13 @@ def _write_portable_moveit_helpers(
     tools_dir = bundle / "tools"
     tools_dir.mkdir(parents=True, exist_ok=True)
     project_root = Path(__file__).resolve().parents[2]
-    for filename in ("validate_urdf.py", "validate_moveit_config.py"):
+    for filename in ("validate_urdf.py", "validate_moveit_config.py", "check_export_runtime.py"):
         shutil.copy2(project_root / "moveit" / filename, tools_dir / filename)
+    (bundle / 'check_export_runtime.sh').write_text(
+        '#!/usr/bin/env bash\nset -e\ncd "$(dirname "$0")"\nsource /opt/ros/humble/setup.bash\n'
+        'if [ -f install/setup.bash ]; then source install/setup.bash; fi\n'
+        f'python3 tools/check_export_runtime.py --description src/{description_package} --srdf src/{moveit_package}/config/{robot_name}.srdf\n',
+        encoding='utf-8', newline='\n')
 
     validation_body = f"""#!/usr/bin/env bash
 set -e
@@ -1550,19 +1556,44 @@ def _simplify_collision_mesh(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
     face_count = len(mesh.faces)
     if face_count <= _COLLISION_SIMPLIFY_THRESHOLD:
         return mesh
+    original = mesh.copy()
+    original.merge_vertices()
+
+    def fallback(reason):
+        result = mesh.copy()
+        result.metadata['collision_simplification'] = {'status': 'fallback', 'reason': reason}
+        return result
+
+    if not original.is_watertight or not original.is_winding_consistent:
+        return fallback('source_topology_invalid')
     target = max(
         _COLLISION_TARGET_MIN_FACES,
         min(_COLLISION_TARGET_MAX_FACES, int(face_count * 0.2)),
     )
     try:
         simplified = mesh.simplify_quadric_decimation(face_count=target)
-        if isinstance(simplified, trimesh.Trimesh) and len(simplified.faces):
-            return simplified
+        if not isinstance(simplified, trimesh.Trimesh) or not len(simplified.faces):
+            return fallback('empty_result')
+        # Verify the actual binary STL geometry too: float32 serialization can
+        # join previously separate vertices and introduce non-manifold edges.
+        checked = trimesh.load_mesh(io.BytesIO(simplified.export(file_type='stl')),
+                                    file_type='stl', process=True)
+        if not np.isfinite(checked.vertices).all() or not checked.is_watertight or not checked.is_winding_consistent:
+            return fallback('simplified_topology_invalid')
+        tolerance = max(float(original.extents.max()) * 0.02, 1e-9)
+        if np.max(np.abs(checked.bounds - original.bounds)) > tolerance:
+            return fallback('bounds_changed')
+        original_volume = abs(float(original.volume))
+        if original_volume <= 0 or abs(abs(float(checked.volume)) - original_volume) / original_volume > 0.05:
+            return fallback('volume_changed')
+        if checked.body_count != original.body_count:
+            return fallback('connected_parts_changed')
+        simplified.metadata['collision_simplification'] = {'status': 'simplified', 'reason': 'verified'}
+        return simplified
     except Exception:
         # Combining still removes per-part collision overhead even when the
         # optional decimation backend rejects a particular CAD mesh.
-        pass
-    return mesh
+        return fallback('decimation_failed')
 
 
 def _write_grouped_collision_meshes(
@@ -1571,6 +1602,7 @@ def _write_grouped_collision_meshes(
     output_mesh_dir: str,
 ) -> dict[str, str]:
     collision_meshes = {}
+    generation_report = {}
     for link_name, visual_parts in additional_visuals.items():
         transformed_parts = []
         for visual_info in visual_parts:
@@ -1599,9 +1631,13 @@ def _write_grouped_collision_meshes(
         combined = trimesh.util.concatenate(transformed_parts)
         combined.remove_unreferenced_vertices()
         combined = _simplify_collision_mesh(combined)
+        generation_report[link_name] = combined.metadata.get('collision_simplification',
+                                                              {'status': 'original', 'reason': 'below_threshold'})
         filename = _collision_filename(link_name)
         combined.export(os.path.join(output_mesh_dir, filename), file_type="stl")
         collision_meshes[link_name] = filename
+    Path(output_mesh_dir, 'collision_mesh_generation.json').write_text(
+        json.dumps(generation_report, ensure_ascii=False, indent=2), encoding='utf-8')
     return collision_meshes
 
 
@@ -1678,6 +1714,8 @@ def export_project(
             "ros_ws",
         )
         if os.path.isdir(bundle_dir):
+            if Path(bundle_dir, 'src', moveit_package).is_dir():
+                raise ValueError('기존 MoveIt 설정을 보호합니다. 앱의 익스포트 준비/적용 경로 또는 새 출력 경로를 사용하세요.')
             _remove_generated_workspace(bundle_dir)
         source_dir = os.path.join(bundle_dir, "src")
         save_dir = os.path.join(source_dir, package_name)
@@ -1706,6 +1744,7 @@ def export_project(
     )
     struct.apply_tree_data(copy.deepcopy(edited_tree))
     struct.standardize_names()
+    Actuator.normalize_joints(struct.joints)
     controller_tree = copy.deepcopy(edited_tree)
     for controller in controller_tree.get('_controllers', []):
         controller['joints'] = [struct.joint_name_map.get(name, name) for name in controller.get('joints', [])]
@@ -1726,6 +1765,17 @@ def export_project(
         struct.joints,
         struct.inertial,
     )
+    from .urdf_analysis import load_robot, zero_positions
+    from .export_consistency import normalized_reference, compare_export
+    from .moveit_groups import resolve_planning_groups
+    with tempfile.TemporaryDirectory() as temp:
+        zero_path = Path(temp) / 'zero.urdf'
+        _write_moveit_seed_urdf(struct, robot_name, str(zero_path), fix_to_world, root_joint_mode)
+        initial_positions = zero_positions(load_robot(zero_path))
+    for name, value in initial_positions.items():
+        struct.joints[name]['initial_position'] = value
+    expected_export = normalized_reference(struct.joints, struct.inertial)
+    planning_groups = resolve_planning_groups(edited_tree, struct.export_name_map, struct.joints, controller_groups) if include_moveit else []
 
     meshes_dir = os.path.join(save_dir, "meshes")
     os.makedirs(meshes_dir, exist_ok=True)
@@ -1770,6 +1820,14 @@ def export_project(
             root_orientation_rpy,
             edited_tree,
         )
+    if root_joint_mode != 'none':
+        root_link = next(name for name in struct.inertial if name not in {j['child'] for j in struct.joints.values()})
+        expected_export['joints']['world_joint' if root_joint_mode == 'world' else 'base_footprint_joint'] = {
+            'type': 'fixed', 'parent': root_joint_mode, 'child': root_link,
+            'xyz': root_origin_xyz, 'rpy': root_orientation_rpy}
+    for frame in resolved_sensor_frames(edited_tree, struct.export_name_map):
+        expected_export['joints'][frame['joint_name']] = {'type': 'fixed', 'parent': frame['parent'],
+            'child': frame['frame'], 'xyz': frame['xyz_m'], 'rpy': frame['rpy_rad']}
     Write.write_urdf(
         struct.joints,
         links_xyz,
@@ -1795,6 +1853,7 @@ def export_project(
     )
     Write.write_materials_xacro(export_colors, robot_name, save_dir)
     Write.write_transmissions_xacro(struct.joints, robot_name, save_dir)
+    Write.write_actuator_config(struct.joints, save_dir)
     Write.write_gazebo_xacro(
         struct.joints,
         links_xyz,
@@ -1861,6 +1920,7 @@ def export_project(
                 Path(moveit_dir),
                 struct.joints,
                 controller_groups,
+                planning_groups,
             )
         _write_portable_moveit_helpers(
             bundle_dir,
@@ -1876,6 +1936,17 @@ def export_project(
             newline="\n",
         )
 
+    robot = load_robot(Path(save_dir, 'urdf', f'{robot_name}.xacro'))
+    consistency = compare_export(expected_export, robot)
+    Path(save_dir, 'analysis', 'export_consistency.json').write_text(
+        json.dumps(consistency, ensure_ascii=False, indent=2), encoding='utf-8')
+    if consistency['status'] == 'error':
+        raise ValueError('익스포트 일치 검사 실패: ' + ' / '.join(d['message'] for d in consistency['differences']))
+    from .collision_diagnostics import diagnose_collision_meshes
+    semantic = ElementTree.parse(Path(moveit_dir, 'config', f'{robot_name}.srdf')).getroot() if moveit_dir else None
+    collision_report = diagnose_collision_meshes(robot, Path(save_dir), semantic)
+    Path(save_dir, 'analysis', 'collision_diagnostics.json').write_text(
+        json.dumps(collision_report, ensure_ascii=False, indent=2), encoding='utf-8')
     return {
         "save_dir": save_dir,
         "bundle_dir": bundle_dir,
@@ -1888,4 +1959,6 @@ def export_project(
         "joint_count": len(struct.joints),
         "moveit_readiness": moveit_readiness,
         "material_warnings": material_warnings,
+        "integrity": {'consistency': consistency['status'], 'collision': collision_report['status'], 'runtime': 'unverified'},
+        "planning_groups": planning_groups,
     }

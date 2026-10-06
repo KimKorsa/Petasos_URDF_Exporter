@@ -5,12 +5,16 @@ import json
 from pathlib import Path
 from xml.etree import ElementTree
 
-import rclpy
-from moveit_msgs.action import MoveGroup
-from moveit_msgs.msg import Constraints, JointConstraint, MoveItErrorCodes
-from rclpy.action import ActionClient
-from rclpy.node import Node
-from sensor_msgs.msg import JointState
+try:
+    import rclpy
+    from moveit_msgs.action import MoveGroup
+    from moveit_msgs.msg import Constraints, JointConstraint, MoveItErrorCodes
+    from rclpy.action import ActionClient
+    from rclpy.node import Node
+    from sensor_msgs.msg import JointState
+except ImportError:
+    rclpy = None
+    Node = object
 
 
 class MoveItSmokePlanner(Node):
@@ -115,7 +119,9 @@ class MoveItSmokePlanner(Node):
 
 def _first_srdf_group(srdf_path: Path) -> str:
     root = ElementTree.parse(srdf_path).getroot()
-    group = root.find("group")
+    group = root.find("group[@name='arm']")
+    if group is None:
+        group = root.find('group')
     if group is None or not group.get("name"):
         raise ValueError(f"SRDF에서 planning group을 찾지 못했습니다: {srdf_path}")
     return group.get("name")
@@ -124,11 +130,14 @@ def _first_srdf_group(srdf_path: Path) -> str:
 def _automatic_targets(
     urdf_path: Path,
     current: dict[str, float],
+    allowed_names: set[str] | None = None,
 ) -> dict[str, float]:
     root = ElementTree.parse(urdf_path).getroot()
     targets: dict[str, float] = {}
     for joint in root.findall("joint"):
         name = joint.get("name")
+        if joint.find('mimic') is not None or (allowed_names is not None and name not in allowed_names):
+            continue
         if name not in current or joint.get("type") not in {
             "revolute",
             "continuous",
@@ -154,6 +163,36 @@ def _automatic_targets(
     return targets
 
 
+def _group_joint_names(srdf, urdf, group_name):
+    groups = {g.get('name'): g for g in srdf.findall('group')}
+    joints = {j.get('name'): j for j in urdf.findall('joint')}
+    by_child = {j.find('child').get('link'): j for j in joints.values()}
+    visiting = set()
+
+    def resolve(name):
+        if name in visiting or name not in groups:
+            raise ValueError(f'{name}: 잘못된 planning group 연결입니다.')
+        visiting.add(name)
+        names = {j.get('name') for j in groups[name].findall('joint')}
+        for chain in groups[name].findall('chain'):
+            current, seen = chain.get('tip_link'), set()
+            while current != chain.get('base_link'):
+                if current in seen or current not in by_child:
+                    raise ValueError(f'{name}: 잘못된 chain입니다.')
+                seen.add(current)
+                joint = by_child[current]
+                names.add(joint.get('name'))
+                current = joint.find('parent').get('link')
+        for subgroup in groups[name].findall('group'):
+            names.update(resolve(subgroup.get('name')))
+        visiting.remove(name)
+        return names
+
+    names = resolve(group_name)
+    return {n for n in names if n in joints and joints[n].get('type') in {'revolute', 'continuous', 'prismatic'}
+            and joints[n].find('mimic') is None}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--group")
@@ -162,6 +201,9 @@ def main() -> int:
     parser.add_argument("--targets")
     args = parser.parse_args()
 
+    if rclpy is None:
+        print('ROS 2 런타임이 없어 실제 움직임 검사는 미검증입니다.')
+        return 2
     rclpy.init()
     node = MoveItSmokePlanner()
     try:
@@ -171,9 +213,12 @@ def main() -> int:
         if args.targets:
             targets = json.loads(args.targets)
         elif args.urdf:
+            allowed = _group_joint_names(ElementTree.parse(args.srdf).getroot(),
+                                         ElementTree.parse(args.urdf).getroot(), group) if args.srdf else None
             targets = _automatic_targets(
                 args.urdf,
                 node.wait_for_joint_state(),
+                allowed,
             )
         else:
             targets = {
