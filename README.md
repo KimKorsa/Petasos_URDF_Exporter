@@ -2,7 +2,7 @@
 
 [English](README.md) | [한국어](README.ko.md)
 
-<img width="1024" height="531" alt="Petasos URDF Exporter editor" src="https://github.com/user-attachments/assets/bf6df849-92bf-4627-af39-4d254a0eda39" />
+<img width="1024" alt="Petasos URDF Exporter editor" src="docs/images/petasos-editor.png" />
 
 [Watch the usage tutorial](https://youtu.be/H9movJFO4Fs)
 
